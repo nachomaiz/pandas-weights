@@ -2,8 +2,6 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-from pandas.core.groupby import GroupBy
-from pandas.core.groupby.ops import BaseGrouper
 
 
 class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
