@@ -46,7 +46,7 @@ def test_df_wt_weighted_column():
 def test_df_wt_init_weight():
     df = frame.DataFrame({"A": [1, 2, 3]})
     weights_series = pd.Series([0.5, 1.5, 2.0])
-    df_wt = frame.WeightedDataFrameAccessor._init_weight(df, weights_series)
+    df_wt = frame.WeightedDataFrameAccessor._init_validated(df, weights_series)
     assert np.array_equal(df_wt.weights, weights_series)
     assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights_series)
 

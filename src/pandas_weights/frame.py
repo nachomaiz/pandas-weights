@@ -5,17 +5,20 @@ from typing import TYPE_CHECKING, Literal, Self
 import numpy as np
 import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
+from pandas.core.groupby.ops import BaseGrouper
+
+from pandas_weights.base import BaseWeightedAccessor
 
 from .accessor import register_accessor as _register_accessor
 
 if TYPE_CHECKING:
     from pandas._typing import (
+        AggFuncType,
         Axis,
         GroupByObjectNonScalar,
         Scalar,
         WindowingEngine,
         WindowingEngineKwargs,
-        AggFuncType,
     )
 
 
@@ -28,11 +31,7 @@ class DataFrame(pd.DataFrame):
 
 
 @_register_accessor("wt", pd.DataFrame)
-class WeightedDataFrameAccessor:
-    def __init__(self, obj: pd.DataFrame) -> None:
-        self.obj = DataFrame(obj)
-        self._weights: pd.Series | np.ndarray | None = None
-
+class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     def __call__(
         self, weights: Hashable | list[int | float] | pd.Series | np.ndarray, /
     ) -> Self:
@@ -44,40 +43,11 @@ class WeightedDataFrameAccessor:
         return self
 
     def __getitem__(self, key: list[Hashable]) -> "WeightedDataFrameAccessor":
-        return WeightedDataFrameAccessor._init_weight(self.obj[key], self.weights)
-
-    @classmethod
-    def _init_weight(
-        cls, pandas_obj: pd.DataFrame, weights: pd.Series | np.ndarray
-    ) -> Self:
-        self = cls(pandas_obj)
-        self.weights = weights
-
-        return self
+        return WeightedDataFrameAccessor._init_validated(self.obj[key], self.weights)
 
     @property
     def T(self) -> DataFrame:
         return DataFrame(self.weighted().T)
-
-    @property
-    def weights(self) -> pd.Series | np.ndarray:
-        if self._weights is None:
-            raise ValueError("Weights have not been set. Set weights with `.wt(...)`.")
-        return self._weights
-
-    @weights.setter
-    def weights(self, value: list[int | float] | pd.Series | np.ndarray) -> None:
-        if len(value) != len(self.obj):
-            raise ValueError("Length of weights must match number of rows in DataFrame")
-        if isinstance(value, list):
-            value = np.array(value)
-        elif isinstance(value, np.ndarray) and value.ndim != 1:
-            raise ValueError("weights must be one-dimensional")
-        self._weights = pd.Series(value, index=self.obj.index)
-
-    def weighted(self) -> DataFrame:
-        """Return a DataFrame with the weights applied to the whole DataFrame."""
-        return self.obj.mul(self.weights, axis=0)
 
     def raw(
         self,
@@ -200,12 +170,17 @@ class WeightedDataFrameAccessor:
 
 
 class WeightedFrameGroupBy(DataFrameGroupBy):
+    _grouper: BaseGrouper
     obj: DataFrame
-    _grouper: pd.Grouper
 
-    def __init__(self, weights: pd.Series | np.ndarray, *args, **kwargs) -> None:
+    def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.weights = weights
+
+    def _group_keys(self) -> pd.Index | pd.MultiIndex:
+        if len(names := self._grouper.names) == 1:
+            return pd.Index(self.obj.reset_index()[names[0]])
+        return pd.MultiIndex.from_frame(self.obj.reset_index()[names])
 
     def _broadcast_weights(self, skipna: bool = True) -> DataFrame:
         if skipna:
@@ -221,16 +196,9 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
             columns=self.obj.drop(columns=self.exclusions).columns,
         ).fillna(1.0)
 
-    def _group_keys(
-        self, group_cols: list[Hashable]
-    ) -> list[Hashable] | list[tuple[Hashable, ...]]:
-        if len(group_cols) == 1:
-            return self.obj.reset_index()[group_cols[0]].tolist()
-        return pd.MultiIndex.from_frame(self.obj.reset_index()[group_cols]).tolist()
-
     def count(self, skipna: bool = True) -> DataFrame:
         weights = self._broadcast_weights(skipna=skipna)
-        return DataFrame(weights.groupby(self._grouper).sum())
+        return DataFrame(weights.groupby(self._grouper).sum())  # type: ignore[return-value]
 
     def sum(
         self,
@@ -269,20 +237,20 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
             .select_dtypes(include=["number", "bool"])
             .columns
         )
-        group_cols = _sorted_group_columns(self)
+        group_keys = self._group_keys()
 
         sum_ = self.sum(engine=engine, engine_kwargs=engine_kwargs)[numeric_cols]
         count = self.count(skipna=skipna)[numeric_cols]
 
         diff = (
             self.obj.reset_index()
-            .set_index(group_cols)[numeric_cols]
-            .sub((sum_ / count).loc[self._group_keys(group_cols)], axis=0)
+            .set_index(group_keys)[numeric_cols]
+            .sub((sum_ / count).loc[group_keys], axis=0)
         )
         diff_squared = diff.mul(diff)
 
         return DataFrame(
-            diff_squared.groupby(self._grouper).sum(
+            diff_squared.groupby(self._grouper).sum(  # type: ignore[return-value]
                 engine=engine, engine_kwargs=engine_kwargs
             )
             / (count - ddof)
@@ -296,10 +264,3 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
         return self.var(ddof, skipna=skipna).pow(0.5)
-
-
-def _sorted_group_columns(grouped: DataFrameGroupBy) -> list[Hashable]:
-    return sorted(
-        grouped.exclusions,
-        key=grouped.obj.columns.get_loc,  # type: ignore
-    )
