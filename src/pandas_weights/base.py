@@ -57,17 +57,3 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
             If weights have not been set.
         """
         return self.obj.mul(self.weights, axis=0)  # type: ignore[return-value]
-
-
-class BaseWeightedGroupBy[T: pd.Series | pd.DataFrame](GroupBy[T]):
-    _grouper: BaseGrouper
-    obj: T
-
-    def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.weights = weights
-
-    def _group_keys(self) -> pd.Index | pd.MultiIndex:
-        if len(names := self._grouper.names) == 1:
-            return pd.Index(self.obj.reset_index()[names[0]])
-        return pd.MultiIndex.from_frame(self.obj.reset_index()[names])
