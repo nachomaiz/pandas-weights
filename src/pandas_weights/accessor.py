@@ -23,11 +23,11 @@ class _Accessor:
     single argument ``data``.
     """
 
-    def __init__(self, name: str, accessor) -> None:
+    def __init__(self, name: str, accessor: type) -> None:
         self._name = name
         self._accessor = accessor
 
-    def __get__(self, obj, cls):
+    def __get__(self, obj, cls: type):
         # Commenting out caching behavior
 
         # if obj is None:
@@ -42,7 +42,7 @@ class _Accessor:
         return accessor_obj
 
 
-def register_accessor(name: str, cls):
+def register_accessor(name: str, cls: type):
     """
     Register a custom accessor on {klass} objects.
 
@@ -114,7 +114,7 @@ def register_accessor(name: str, cls):
             In [3]: ds.geo.plot()  # plots data on a map
     """
 
-    def decorator(accessor):
+    def decorator(accessor: type) -> type:
         if hasattr(cls, name):  # pragma: no cover
             warnings.warn(
                 f"registration of accessor {repr(accessor)} under name "
