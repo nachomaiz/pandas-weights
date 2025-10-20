@@ -1,6 +1,9 @@
 # From pandas.core.accessor, modified so it doesn't cache the accessor
 
 import warnings
+from typing import Callable
+
+import pandas as pd
 
 
 class _Accessor:
@@ -42,7 +45,9 @@ class _Accessor:
         return accessor_obj
 
 
-def register_accessor(name: str, cls: type):
+def register_accessor[K: type](
+    name: str, cls: type[pd.Series | pd.DataFrame]
+) -> Callable[[K], K]:
     """
     Register a custom accessor on {klass} objects.
 
@@ -114,7 +119,7 @@ def register_accessor(name: str, cls: type):
             In [3]: ds.geo.plot()  # plots data on a map
     """
 
-    def decorator(accessor: type) -> type:
+    def decorator(accessor: K) -> K:
         if hasattr(cls, name):  # pragma: no cover
             warnings.warn(
                 f"registration of accessor {repr(accessor)} under name "
@@ -124,7 +129,7 @@ def register_accessor(name: str, cls: type):
                 stacklevel=3,
             )
         setattr(cls, name, _Accessor(name, accessor))
-        cls._accessors.add(name)
+        cls._accessors.add(name)  # type: ignore[attr-defined]
         return accessor
 
     return decorator
