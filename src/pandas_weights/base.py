@@ -3,9 +3,10 @@ from typing import Self
 import numpy as np
 import pandas as pd
 
+from pandas_weights.typing_ import D1NumericArray
+
 
 class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
-    _weights: pd.Series | None
     """
     Base class for weight accessors.
 
@@ -17,7 +18,7 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
 
     def __init__(self, pandas_obj: T) -> None:
         self.obj = pandas_obj
-        self._weights = None
+        self._weights: pd.Series | None = None
 
     @classmethod
     def _init_validated(cls, pandas_obj: T, weights: pd.Series) -> Self:
@@ -33,9 +34,9 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
         return self._weights
 
     @weights.setter
-    def weights(self, value: list[int | float] | pd.Series | np.ndarray) -> None:
+    def weights(self, value: D1NumericArray) -> None:
         if len(value) != len(self.obj):
-            raise ValueError("Length of weights must match number of rows in DataFrame")
+            raise ValueError("Length of weights must match number of rows in the data.")
         if isinstance(value, np.ndarray) and value.ndim != 1:
             raise ValueError("weights must be one-dimensional")
         self._weights = pd.Series(value, index=self.obj.index)

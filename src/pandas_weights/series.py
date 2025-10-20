@@ -1,3 +1,4 @@
+from collections.abc import Hashable, Iterator
 from enum import Enum
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -28,14 +29,14 @@ class Series(pd.Series):
 
 
 @_register_accessor("wt", pd.Series)
-class WeightedSeriesAccessor(BaseWeightedAccessor[pd.Series]):
-    def __call__(self, weights: pd.Series | np.ndarray | list[int | float]) -> Self:
+class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
+    def __call__(self, weights: list[int | float] | pd.Series | np.ndarray, /) -> Self:
         self.weights = weights
         return self
 
     @property
     def T(self) -> Series:
-        return Series(self.weighted().T)
+        return self.weighted().T
 
     def groupby(
         self,
@@ -63,32 +64,28 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[pd.Series]):
 
         return WeightedSeriesGroupBy(self.weights, self.obj, **kwargs)
 
-    def count(self, axis: "AxisIndex" = 0, skipna: bool = True) -> pd.Series:
+    def count(self, axis: "AxisIndex" = 0, skipna: bool = True) -> float:
         if skipna:
             weights = self.obj.notna().mul(self.weights, axis=0)
         else:
             weights = pd.Series(self.weights, index=self.obj.index).fillna(1.0)
         return weights.sum(axis=axis)
 
-    def sum(self, axis: "AxisIndex" = 0, min_count: int = 0) -> pd.Series:
+    def sum(self, axis: "AxisIndex" = 0, min_count: int = 0) -> float:
         return self.weighted().sum(axis=axis, min_count=min_count)
 
-    def mean(self, axis: "AxisIndex" = 0, skipna: bool = True) -> pd.Series:
+    def mean(self, axis: "AxisIndex" = 0, skipna: bool = True) -> float:
         return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)
 
-    def var(
-        self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True
-    ) -> pd.Series:
+    def var(self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True) -> float:
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
-        diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
+        diff = self.obj.sub(sum_ / count)
         diff_squared = diff.mul(diff)
         return diff_squared.sum(axis=axis) / (count - ddof)
 
-    def std(
-        self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True
-    ) -> pd.Series:
-        return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)
+    def std(self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True) -> float:
+        return self.var(axis=axis, ddof=ddof, skipna=skipna) ** 0.5
 
     def apply(
         self,
@@ -97,7 +94,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[pd.Series]):
         convertDType: bool = False,
         args: tuple = (),
         **kwargs,
-    ) -> pd.Series | pd.DataFrame:
+    ) -> float | pd.Series | pd.DataFrame:
         return self.weighted().apply(  # type: ignore
             func,  # type: ignore
             axis=axis,
@@ -111,36 +108,48 @@ class WeightedSeriesGroupBy(SeriesGroupBy):
     _grouper: BaseGrouper
     obj: Series
 
-    def __init__(self, weights: pd.Series | np.ndarray, *args, **kwargs) -> None:
+    def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.weights = weights
+
+    def __iter__(self) -> Iterator[tuple[Hashable, WeightedSeriesAccessor]]:
+        for key, group in super().__iter__():
+            yield (
+                key,
+                WeightedSeriesAccessor._init_validated(
+                    group,  # type: ignore[arg-type]
+                    self.weights.loc[key],
+                ),
+            )
 
     def _group_keys(self) -> pd.Index | pd.MultiIndex:
         if len(names := self._grouper.names) == 1:
             return pd.Index(self.obj.reset_index()[names[0]])
         return pd.MultiIndex.from_frame(self.obj.reset_index()[names])
 
-    def count(self, dropna: bool = True) -> pd.Series:
-        if dropna:
+    def count(self, skipna: bool = True) -> Series:
+        if skipna:
             weights = self.obj.notna().mul(self.weights)
         else:
             weights = pd.Series(self.weights, index=self.obj.index).fillna(1.0)
-        return weights.groupby(self._grouper).sum()  # type: ignore[return-value]
+        return weights.groupby(self._grouper).sum()  # type: ignore[arg-type]
 
-    def sum(self, min_count: int = 0) -> pd.Series:
-        weighted_obj = self.obj.mul(self.weights)
-        return weighted_obj.groupby(self._grouper).sum(min_count=min_count)  # type: ignore[return-value]
+    def sum(self, min_count: int = 0) -> Series:
+        weighted = self.obj.mul(self.weights)  # type: ignore
+        return weighted.groupby(self._grouper).sum(min_count=min_count)  # type: ignore[arg-type]
 
-    def mean(self, skipna: bool = True) -> pd.Series:
-        return self.sum(min_count=1) / self.count(dropna=skipna)
+    def mean(self, skipna: bool = True) -> Series:
+        return self.sum(min_count=1) / self.count(skipna=skipna)  # type: ignore[return-value]
 
-    def var(self, ddof: int = 1, skipna: bool = True) -> pd.Series:
+    def var(self, ddof: int = 1, skipna: bool = True) -> Series:
+        weighted = self.obj.mul(self.weights)
         sum_ = self.sum(min_count=1)
-        count = self.count(dropna=skipna)
-        diff = self.obj.sub((sum_ / count).loc[self._group_keys()], axis=0)
+        count = self.count(skipna=skipna)
+        diff = weighted.sub(
+            (sum_ / count).loc[self._group_keys()].set_axis(self.obj.index)
+        )
         diff_squared = diff.mul(diff)
-        weighted_diff_squared = diff_squared.mul(self.weights)
-        return weighted_diff_squared.groupby(self._grouper).sum() / (count - ddof)  # type: ignore[return-value]
+        return diff_squared.groupby(self._grouper).sum() / (count - ddof)  # type: ignore[arg-type]
 
-    def std(self, ddof: int = 1, skipna: bool = True) -> pd.Series:
-        return self.var(ddof=ddof, skipna=skipna).pow(0.5)
+    def std(self, ddof: int = 1, skipna: bool = True) -> Series:
+        return self.var(ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]

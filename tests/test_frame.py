@@ -14,7 +14,7 @@ def test_df_wt_error_on_no_weights_set():
 def test_df_wt_error_on_weights_length_mismatch():
     df = frame.DataFrame({"A": [1, 2, 3]})
     with pytest.raises(
-        ValueError, match="Length of weights must match number of rows in DataFrame"
+        ValueError, match="Length of weights must match number of rows in the data."
     ):
         df.wt(np.array([1, 2]))
 
@@ -135,6 +135,35 @@ def test_df_wt_groupby_init():
     grouped = df.wt("weights").groupby("Group")
     assert isinstance(grouped, frame.WeightedFrameGroupBy)
     assert np.array_equal(grouped.weights, df["weights"])
+
+
+def test_df_wt_groupby_iter():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "B", "B"],
+            "Value": [10, 20, 30, 40],
+            "weights": [1.0, 2.0, 1.5, 2.5],
+        }
+    )
+    grouped = df.wt("weights").groupby("Group")
+    groups = dict(iter(grouped))
+    assert set(groups.keys()) == {"A", "B"}
+    assert np.array_equal(
+        groups["A"].obj,
+        df[df["Group"] == "A"][["Group", "Value"]],
+    )
+    assert np.array_equal(
+        groups["B"].obj,
+        df[df["Group"] == "B"][["Group", "Value"]],
+    )
+    assert np.array_equal(
+        groups["A"].weights,
+        df[df["Group"] == "A"]["weights"],
+    )
+    assert np.array_equal(
+        groups["B"].weights,
+        df[df["Group"] == "B"]["weights"],
+    )
 
 
 def test_df_wt_groupby_count():

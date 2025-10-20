@@ -1,4 +1,4 @@
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterator
 from enum import Enum
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -8,6 +8,7 @@ from pandas.core.groupby import DataFrameGroupBy
 from pandas.core.groupby.ops import BaseGrouper
 
 from pandas_weights.base import BaseWeightedAccessor
+from pandas_weights.typing_ import D1NumericArray
 
 from .accessor import register_accessor as _register_accessor
 
@@ -32,9 +33,7 @@ class DataFrame(pd.DataFrame):
 
 @_register_accessor("wt", pd.DataFrame)
 class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
-    def __call__(
-        self, weights: Hashable | list[int | float] | pd.Series | np.ndarray, /
-    ) -> Self:
+    def __call__(self, weights: Hashable | D1NumericArray, /) -> Self:
         if isinstance(weights, (list, pd.Series, np.ndarray)):
             self.weights = weights
         else:
@@ -47,47 +46,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
     @property
     def T(self) -> DataFrame:
-        return DataFrame(self.weighted().T)
-
-    def raw(
-        self,
-        weights_col: Hashable | tuple[Hashable, ...] | None = None,
-        conflict: Literal["overwrite", "raise"] = "raise",
-        default: Hashable | tuple[Hashable, ...] = "weights",
-    ) -> pd.DataFrame:
-        """Return the original DataFrame without weights applied.
-
-        If weights were set using a column name, the original DataFrame is returned.
-
-        If weights were set using a Series or array, it will be added as a new column to the
-        DataFrame. The name of the new column can be specified using the `weights_col`
-        parameter. If `weights_col` is None, the name will be set to `default`. If a column
-        with the same name already exists in the DataFrame, a ValueError will be raised
-        unless `conflict` is set to "overwrite".
-        """
-        if weights_col is None:
-            weights_col = default
-
-        if weights_col in self.obj.columns:
-            if conflict == "raise":
-                raise ValueError(
-                    f"Column '{weights_col}' already exists in DataFrame. "
-                    "Set `conflict='overwrite'` to overwrite it."
-                )
-            df = self.obj.drop(columns=weights_col)
-        else:
-            df = self.obj
-
-        if nlevels := self.obj.columns.nlevels and not isinstance(weights_col, tuple):
-            weights_col = (weights_col,) * nlevels
-
-        if isinstance(self.weights, pd.Series):
-            if not self.weights.name:
-                self.weights.name = weights_col
-            weights = self.weights
-        else:
-            weights = pd.Series(self.weights, index=self.obj.index, name=weights_col)
-        return pd.concat([weights, df], axis=1)
+        return self.weighted().T
 
     def groupby(
         self,
@@ -177,6 +136,16 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         super().__init__(*args, **kwargs)
         self.weights = weights
 
+    def __iter__(self) -> Iterator[tuple[Hashable, WeightedDataFrameAccessor]]:
+        for group_name, group_df in super().__iter__():
+            yield (
+                group_name,
+                WeightedDataFrameAccessor._init_validated(
+                    DataFrame(group_df),
+                    self.weights.loc[group_df.index],
+                ),
+            )
+
     def _group_keys(self) -> pd.Index | pd.MultiIndex:
         if len(names := self._grouper.names) == 1:
             return pd.Index(self.obj.reset_index()[names[0]])
@@ -187,7 +156,7 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
             return (
                 self.obj.drop(columns=self.exclusions).notna().mul(self.weights, axis=0)
             )
-        return DataFrame(
+        return pd.DataFrame(  # type: ignore[return-value]
             np.broadcast_to(
                 np.asarray(self.weights).reshape(-1, 1),
                 self.obj.drop(columns=self.exclusions).shape,
@@ -196,9 +165,31 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
             columns=self.obj.drop(columns=self.exclusions).columns,
         ).fillna(1.0)
 
+    def _numeric_columns(self) -> pd.Index:
+        return (
+            self.obj.drop(columns=self.exclusions, errors="ignore")
+            .select_dtypes(include=["number", "bool"])
+            .columns
+        )
+
+    def _weighted(self, numeric_cols: pd.Index | None = None) -> DataFrame:
+        weighted = self.obj.copy()
+        if numeric_cols is None:
+            numeric_cols = self._numeric_columns()
+        weighted[numeric_cols] = weighted[numeric_cols].mul(self.weights, axis=0)
+        return weighted
+
     def count(self, skipna: bool = True) -> DataFrame:
         weights = self._broadcast_weights(skipna=skipna)
-        return DataFrame(weights.groupby(self._grouper).sum())  # type: ignore[return-value]
+        return weights.groupby(self._grouper).sum()  # type: ignore[arg-type,return-value]
+
+    def _count_numeric(
+        self, skipna: bool = True, numeric_cols: pd.Index | None = None
+    ) -> DataFrame:
+        weights = self._broadcast_weights(skipna=skipna)
+        if numeric_cols is None:
+            numeric_cols = self._numeric_columns()
+        return weights.groupby(self._grouper)[numeric_cols].sum()  # type: ignore[arg-type,return-value]
 
     def sum(
         self,
@@ -206,15 +197,29 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
-        numeric_cols = self.obj.select_dtypes(include=["number", "bool"]).columns
-        self.obj[numeric_cols] = self.obj[numeric_cols].mul(self.weights, axis=0)
-        return DataFrame(
-            super().sum(
-                numeric_only=True,
-                min_count=min_count,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-            )
+        numeric_cols = self._numeric_columns()
+        return self._sum_weighted(
+            self._weighted(numeric_cols),
+            numeric_cols=numeric_cols,
+            min_count=min_count,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+        )
+
+    def _sum_weighted(
+        self,
+        weighted: DataFrame,
+        numeric_cols: pd.Index | None = None,
+        min_count: int = 0,
+        engine: "WindowingEngine" = None,
+        engine_kwargs: "WindowingEngineKwargs" = None,
+    ) -> DataFrame:
+        if numeric_cols is None:
+            numeric_cols = self._numeric_columns()
+        return weighted.groupby(self._grouper)[numeric_cols].sum(  # type: ignore[arg-type, return-value]
+            min_count=min_count,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
         )
 
     def mean(
@@ -223,7 +228,11 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
-        return self.sum() / self.count(skipna=skipna)
+        numeric_cols = self._numeric_columns()
+        weighted = self._weighted(numeric_cols)
+        return self._sum_weighted(
+            weighted, numeric_cols, engine=engine, engine_kwargs=engine_kwargs
+        ) / self._count_numeric(skipna=skipna, numeric_cols=numeric_cols)
 
     def var(
         self,
@@ -232,29 +241,28 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
-        numeric_cols = (
-            self.obj.drop(columns=self.exclusions, errors="ignore")
-            .select_dtypes(include=["number", "bool"])
-            .columns
-        )
+        numeric_cols = self._numeric_columns()
         group_keys = self._group_keys()
+        weighted = self._weighted(numeric_cols)
 
-        sum_ = self.sum(engine=engine, engine_kwargs=engine_kwargs)[numeric_cols]
-        count = self.count(skipna=skipna)[numeric_cols]
+        sum_ = self._sum_weighted(
+            weighted,
+            numeric_cols=numeric_cols,
+            engine=engine,
+            engine_kwargs=engine_kwargs,
+        )[numeric_cols]
+        count = self._count_numeric(skipna=skipna, numeric_cols=numeric_cols)
 
         diff = (
-            self.obj.reset_index()
+            weighted.reset_index()
             .set_index(group_keys)[numeric_cols]
             .sub((sum_ / count).loc[group_keys], axis=0)
         )
         diff_squared = diff.mul(diff)
 
-        return DataFrame(
-            diff_squared.groupby(self._grouper).sum(  # type: ignore[return-value]
-                engine=engine, engine_kwargs=engine_kwargs
-            )
-            / (count - ddof)
-        )
+        return diff_squared.groupby(self._grouper).sum(  # type: ignore[arg-type]
+            engine=engine, engine_kwargs=engine_kwargs
+        ) / (count - ddof)
 
     def std(
         self,
@@ -263,4 +271,6 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
-        return self.var(ddof, skipna=skipna).pow(0.5)
+        return self.var(
+            ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs
+        ).pow(0.5)
