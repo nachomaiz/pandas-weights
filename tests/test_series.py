@@ -147,7 +147,7 @@ def test_series_wt_groupby_iter():
     )
 
 
-def test_df_wt_groupby_count():
+def test_series_wt_groupby_count():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
     s = series.Series([10, 20, None, 40], index=idx).astype(float)
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
