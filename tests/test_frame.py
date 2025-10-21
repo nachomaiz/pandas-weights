@@ -245,3 +245,30 @@ def test_df_wt_groupby_std():
         index=pd.Index(["A", "B"], name="Group"),
     )
     pd.testing.assert_frame_equal(grouped.std(), expected_std)
+
+
+def test_df_wt_apply():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "B", "B"],
+            "Value": [10, 20, 30, 40],
+            "weights": [1.0, 2.0, 1.5, 2.5],
+        }
+    ).set_index("Group")
+
+    def weighted_range(series: pd.Series) -> float:
+        return series.max() - series.min()
+
+    expected_apply_scalar = pd.Series({"Value": 90.0})
+    pd.testing.assert_series_equal(
+        df.wt("weights").apply(weighted_range), expected_apply_scalar
+    )
+
+    def weighted_minmax(series: pd.Series) -> pd.Series:
+        return pd.Series({"min": series.min(), "max": series.max()})
+
+    expected_apply_array = pd.DataFrame({"Value": {"min": 10.0, "max": 100.0}})
+    pd.testing.assert_frame_equal(
+        df.wt("weights").apply(weighted_minmax),
+        expected_apply_array,
+    )

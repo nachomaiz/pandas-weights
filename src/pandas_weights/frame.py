@@ -1,6 +1,6 @@
 from collections.abc import Hashable, Iterator
 from enum import Enum
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Callable, Literal, Self, overload
 
 import numpy as np
 import pandas as pd
@@ -103,6 +103,58 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     def std(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> pd.Series:
         return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)
 
+    @overload
+    def apply(
+        self,
+        func: Callable[..., "Scalar"],
+        axis: "Axis" = ...,
+        raw: bool = ...,
+        result_type: Literal["reduce"] | None = ...,
+        args: tuple = ...,
+        by_row: Literal[False, "compat"] = ...,
+        engine: Literal["python", "numba"] = ...,
+        engine_kwargs: dict[str, bool] | None = ...,
+        **kwargs,
+    ) -> pd.Series: ...
+    @overload
+    def apply(
+        self,
+        func: Callable[..., "Scalar"],
+        axis: "Axis" = ...,
+        raw: bool = ...,
+        result_type: Literal["expand", "broadcast"] = ...,
+        args: tuple = ...,
+        by_row: Literal[False, "compat"] = ...,
+        engine: Literal["python", "numba"] = ...,
+        engine_kwargs: dict[str, bool] | None = ...,
+        **kwargs,
+    ) -> pd.DataFrame: ...
+    @overload
+    def apply(
+        self,
+        func: Callable[..., D1NumericArray],
+        axis: "Axis" = 0,
+        raw: bool = ...,
+        result_type: Literal["expand", "broadcast"] | None = ...,
+        args: tuple = ...,
+        by_row: Literal[False, "compat"] = ...,
+        engine: Literal["python", "numba"] = ...,
+        engine_kwargs: dict[str, bool] | None = ...,
+        **kwargs,
+    ) -> pd.DataFrame: ...
+    @overload
+    def apply(
+        self,
+        func: Callable[..., D1NumericArray],
+        axis: "Axis" = 0,
+        raw: bool = ...,
+        result_type: Literal["reduce"] = "reduce",
+        args: tuple = ...,
+        by_row: Literal[False, "compat"] = ...,
+        engine: Literal["python", "numba"] = ...,
+        engine_kwargs: dict[str, bool] | None = ...,
+        **kwargs,
+    ) -> pd.Series: ...
     def apply(
         self,
         func: "AggFuncType",
