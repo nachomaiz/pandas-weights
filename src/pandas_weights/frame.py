@@ -10,8 +10,6 @@ from pandas.core.groupby.ops import BaseGrouper
 from pandas_weights.base import BaseWeightedAccessor
 from pandas_weights.typing_ import D1NumericArray
 
-from .accessor import register_accessor as _register_accessor
-
 if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
@@ -31,18 +29,26 @@ class DataFrame(pd.DataFrame):
     wt: "WeightedDataFrameAccessor"
 
 
-@_register_accessor("wt", pd.DataFrame)
+@pd.api.extensions.register_dataframe_accessor("wt")
 class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     def __call__(self, weights: Hashable | D1NumericArray, /) -> Self:
         if isinstance(weights, (list, pd.Series, np.ndarray)):
             self.weights = weights
         else:
             self._weights = self.obj[weights]  # we know it's the right length
-            self.obj = self.obj.drop(columns=weights)
+            # self.obj = self.obj.drop(columns=weights)
         return self
 
     def __getitem__(self, key: list[Hashable]) -> "WeightedDataFrameAccessor":
         return WeightedDataFrameAccessor._init_validated(self.obj[key], self.weights)
+
+    def weighted(self) -> DataFrame:
+        return self._clean_obj().mul(self.weights, axis=0)
+
+    def _clean_obj(self) -> DataFrame:
+        if (weights_col := self.weights.name) in self.obj.columns:
+            return self.obj.drop(columns=weights_col)
+        return self.obj
 
     @property
     def T(self) -> DataFrame:
@@ -72,18 +78,18 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         if observed is not _NoDefault.no_default:
             kwargs["observed"] = observed
 
-        return WeightedFrameGroupBy(self.weights, self.obj, **kwargs)
+        return WeightedFrameGroupBy(self.weights, self._clean_obj(), **kwargs)
 
     def count(self, axis: "Axis" = 0, skipna: bool = True) -> pd.Series:
+        obj = self._clean_obj()
+
         if skipna:
-            weights = self.obj.notna().mul(self.weights, axis=0)
+            weights = obj.notna().mul(self.weights, axis=0)
         else:
             weights = pd.DataFrame(
-                np.broadcast_to(
-                    np.asarray(self.weights).reshape(-1, 1), self.obj.shape
-                ),
-                index=self.obj.index,
-                columns=self.obj.columns,
+                np.broadcast_to(np.asarray(self.weights).reshape(-1, 1), obj.shape),
+                index=obj.index,
+                columns=obj.columns,
             ).fillna(1.0)
         return weights.sum(axis=axis)
 

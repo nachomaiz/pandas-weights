@@ -40,19 +40,3 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
         if isinstance(value, np.ndarray) and value.ndim != 1:
             raise ValueError("weights must be one-dimensional")
         self._weights = pd.Series(value, index=self.obj.index)
-
-    def weighted(self) -> T:
-        """
-        Return the weighted version of the underlying pandas object.
-
-        Returns
-        -------
-        Series or DataFrame
-            The weighted pandas object.
-
-        Raises
-        ------
-        ValueError
-            If weights have not been set.
-        """
-        return self.obj.mul(self.weights, axis=0)  # type: ignore[return-value]

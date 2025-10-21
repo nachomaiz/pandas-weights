@@ -9,8 +9,6 @@ from pandas.core.groupby.ops import BaseGrouper
 
 from pandas_weights.base import BaseWeightedAccessor
 
-from .accessor import register_accessor as _register_accessor
-
 if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
@@ -28,11 +26,14 @@ class Series(pd.Series):
     wt: "WeightedSeriesAccessor"
 
 
-@_register_accessor("wt", pd.Series)
+@pd.api.extensions.register_series_accessor("wt")
 class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def __call__(self, weights: list[int | float] | pd.Series | np.ndarray, /) -> Self:
         self.weights = weights
         return self
+
+    def weighted(self) -> Series:
+        return self.obj.mul(self.weights)  # type: ignore[return-value]
 
     @property
     def T(self) -> Series:
