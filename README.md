@@ -150,6 +150,8 @@ Currently, only the following aggregation functions are implemented:
   - `var()`
   - `std()`
   - `apply(func, ...)`
+  - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
+    - where `group_data` is the group's `DataFrame` with `.wt(...)` already applied.
 
 > [!warning]
 > `.wt` and `.wt.groupby` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.
