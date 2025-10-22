@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Literal, Self
 import numpy as np
 import pandas as pd
 from pandas.core.groupby import SeriesGroupBy
-from pandas.core.groupby.ops import BaseGrouper
 
 from pandas_weights.base import BaseWeightedAccessor
 
@@ -105,16 +104,13 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         )
 
 
-class WeightedSeriesGroupBy(SeriesGroupBy):
-    _grouper: BaseGrouper
-    obj: Series
-
+class WeightedSeriesGroupBy:
     def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        self._groupby = SeriesGroupBy(*args, **kwargs)
         self.weights = weights
 
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedSeriesAccessor]]:
-        for key, group in super().__iter__():
+        for key, group in self._groupby:
             yield (
                 key,
                 WeightedSeriesAccessor._init_validated(
@@ -124,33 +120,40 @@ class WeightedSeriesGroupBy(SeriesGroupBy):
             )
 
     def _group_keys(self) -> pd.Index | pd.MultiIndex:
-        if len(names := self._grouper.names) == 1:
-            return pd.Index(self.obj.reset_index()[names[0]])
-        return pd.MultiIndex.from_frame(self.obj.reset_index()[names])
+        if len(names := self._groupby._grouper.names) == 1:
+            return pd.Index(self._groupby.obj.reset_index()[names[0]])
+        return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])
 
     def count(self, skipna: bool = True) -> Series:
         if skipna:
-            weights = self.obj.notna().mul(self.weights)
+            weights = self._groupby.obj.notna().mul(self.weights)
         else:
-            weights = pd.Series(self.weights, index=self.obj.index).fillna(1.0)
-        return weights.groupby(self._grouper).sum()  # type: ignore[arg-type]
+            weights = pd.Series(self.weights, index=self._groupby.obj.index).fillna(1.0)
+        return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type]
 
     def sum(self, min_count: int = 0) -> Series:
-        weighted = self.obj.mul(self.weights)  # type: ignore
-        return weighted.groupby(self._grouper).sum(min_count=min_count)  # type: ignore[arg-type]
+        weighted = self._groupby.obj.mul(self.weights)  # type: ignore
+        return weighted.groupby(self._groupby._grouper).sum(min_count=min_count)  # type: ignore[arg-type]
 
     def mean(self, skipna: bool = True) -> Series:
         return self.sum(min_count=1) / self.count(skipna=skipna)  # type: ignore[return-value]
 
     def var(self, ddof: int = 1, skipna: bool = True) -> Series:
-        weighted = self.obj.mul(self.weights)
+        weighted = self._groupby.obj.mul(self.weights)
         sum_ = self.sum(min_count=1)
         count = self.count(skipna=skipna)
         diff = weighted.sub(
-            (sum_ / count).loc[self._group_keys()].set_axis(self.obj.index)
+            (sum_ / count).loc[self._group_keys()].set_axis(self._groupby.obj.index)
         )
         diff_squared = diff.mul(diff)
-        return diff_squared.groupby(self._grouper).sum() / (count - ddof)  # type: ignore[arg-type]
+        return diff_squared.groupby(self._groupby._grouper).sum() / (count - ddof)  # type: ignore[arg-type]
 
     def std(self, ddof: int = 1, skipna: bool = True) -> Series:
         return self.var(ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
+
+    def apply(self, func: "AggFuncType", *args, **kwargs) -> pd.Series:
+        return (
+            self._groupby.obj.mul(self.weights)
+            .groupby(self._groupby._grouper)  # type: ignore[arg-type]
+            .apply(func, *args, **kwargs)
+        )

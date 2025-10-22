@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Callable, Literal, Self, overload
 import numpy as np
 import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
-from pandas.core.groupby.ops import BaseGrouper
 
 from pandas_weights.base import BaseWeightedAccessor
 from pandas_weights.typing_ import D1NumericArray
@@ -186,16 +185,13 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         )
 
 
-class WeightedFrameGroupBy(DataFrameGroupBy):
-    _grouper: BaseGrouper
-    obj: DataFrame
-
+class WeightedFrameGroupBy:
     def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        self._groupby = DataFrameGroupBy(*args, **kwargs)
         self.weights = weights
 
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedDataFrameAccessor]]:
-        for group_name, group_df in super().__iter__():
+        for group_name, group_df in self._groupby:
             yield (
                 group_name,
                 WeightedDataFrameAccessor._init_validated(
@@ -205,41 +201,41 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
             )
 
     def _group_keys(self) -> pd.Index | pd.MultiIndex:
-        if len(names := self._grouper.names) == 1:
-            return pd.Index(self.obj.reset_index()[names[0]])
-        return pd.MultiIndex.from_frame(self.obj.reset_index()[names])
+        if len(names := self._groupby._grouper.names) == 1:
+            return pd.Index(self._groupby.obj.reset_index()[names[0]])
+        return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])
 
     def _broadcast_weights(self, skipna: bool = True) -> DataFrame:
         if skipna:
-            return (
-                self.obj.drop(columns=self.exclusions).notna().mul(self.weights, axis=0)
+            return (  # type: ignore[arg-type,return-value]
+                self._groupby.obj.drop(columns=self._groupby.exclusions).notna().mul(self.weights, axis=0)
             )
         return pd.DataFrame(  # type: ignore[return-value]
             np.broadcast_to(
                 np.asarray(self.weights).reshape(-1, 1),
-                self.obj.drop(columns=self.exclusions).shape,
+                self._groupby.obj.drop(columns=self._groupby.exclusions).shape,
             ),
-            index=self.obj.index,
-            columns=self.obj.drop(columns=self.exclusions).columns,
+            index=self._groupby.obj.index,
+            columns=self._groupby.obj.drop(columns=self._groupby.exclusions).columns,
         ).fillna(1.0)
 
     def _numeric_columns(self) -> pd.Index:
         return (
-            self.obj.drop(columns=self.exclusions, errors="ignore")
+            self._groupby.obj.drop(columns=self._groupby.exclusions, errors="ignore")
             .select_dtypes(include=["number", "bool"])
             .columns
         )
 
     def _weighted(self, numeric_cols: pd.Index | None = None) -> DataFrame:
-        weighted = self.obj.copy()
+        weighted = self._groupby.obj.copy()
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
         weighted[numeric_cols] = weighted[numeric_cols].mul(self.weights, axis=0)
-        return weighted
+        return weighted  # type: ignore[arg-type,return-value]
 
     def count(self, skipna: bool = True) -> DataFrame:
         weights = self._broadcast_weights(skipna=skipna)
-        return weights.groupby(self._grouper).sum()  # type: ignore[arg-type,return-value]
+        return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type,return-value]
 
     def _count_numeric(
         self, skipna: bool = True, numeric_cols: pd.Index | None = None
@@ -247,7 +243,7 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         weights = self._broadcast_weights(skipna=skipna)
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
-        return weights.groupby(self._grouper)[numeric_cols].sum()  # type: ignore[arg-type,return-value]
+        return weights.groupby(self._groupby._grouper)[numeric_cols].sum()  # type: ignore[arg-type,return-value]
 
     def sum(
         self,
@@ -266,7 +262,7 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
 
     def _sum_weighted(
         self,
-        weighted: DataFrame,
+        weighted: pd.DataFrame,
         numeric_cols: pd.Index | None = None,
         min_count: int = 0,
         engine: "WindowingEngine" = None,
@@ -274,7 +270,7 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
     ) -> DataFrame:
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
-        return weighted.groupby(self._grouper)[numeric_cols].sum(  # type: ignore[arg-type, return-value]
+        return weighted.groupby(self._groupby._grouper)[numeric_cols].sum(  # type: ignore[arg-type, return-value]
             min_count=min_count,
             engine=engine,
             engine_kwargs=engine_kwargs,
@@ -318,7 +314,7 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         )
         diff_squared = diff.mul(diff)
 
-        return diff_squared.groupby(self._grouper).sum(  # type: ignore[arg-type]
+        return diff_squared.groupby(self._groupby._grouper).sum(  # type: ignore[arg-type]
             engine=engine, engine_kwargs=engine_kwargs
         ) / (count - ddof)
 
@@ -332,3 +328,31 @@ class WeightedFrameGroupBy(DataFrameGroupBy):
         return self.var(
             ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs
         ).pow(0.5)
+
+    def apply(
+        self,
+        func: "AggFuncType",
+        axis: "Axis" = 0,
+        raw: bool = False,
+        result_type: Literal["expand", "reduce", "broadcast"] | None = None,
+        args: tuple = (),
+        by_row: Literal[False, "compat"] = "compat",
+        engine: Literal["python", "numba"] = "python",
+        engine_kwargs: dict[str, bool] | None = None,
+        **kwargs,
+    ) -> pd.Series | pd.DataFrame:
+        return (
+            self._weighted()
+            .groupby(self._groupby._grouper)  # type: ignore[arg-type]
+            .apply(
+                func,  # type: ignore[arg-type]
+                axis=axis,
+                raw=raw,
+                result_type=result_type,  # type: ignore[arg-type]
+                args=args,
+                by_row=by_row,
+                engine=engine,
+                engine_kwargs=engine_kwargs,
+                **kwargs,
+            )
+        )
