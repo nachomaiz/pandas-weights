@@ -55,16 +55,19 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         return WeightedSeriesAccessor._init_validated(self.obj[key], self.weights)  # type: ignore[arg-type]
 
     def weighted(self) -> DataFrame:
+        """Get the DataFrame with applied weights
+
+        Returns
+        -------
+        DataFrame
+            DataFrame with applied weights
+        """
         return self._clean_obj().mul(self.weights, axis=0)
 
     def _clean_obj(self) -> DataFrame:
         if (weights_col := self.weights.name) in self.obj.columns:
             return self.obj.drop(columns=weights_col)
         return self.obj
-
-    @property
-    def T(self) -> DataFrame:
-        return self.weighted().T
 
     def groupby(
         self,
@@ -77,6 +80,10 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         observed: bool | Literal[_NoDefault.no_default] = _NoDefault.no_default,
         dropna: bool = True,
     ) -> "WeightedFrameGroupBy":
+        """Perform a weighted groupby operation on the DataFrame.
+
+        See `pandas.DataFrame.groupby` for more details on the parameters.
+        """
         kwargs = {
             "keys": by,
             "level": level,
@@ -93,6 +100,19 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         return WeightedFrameGroupBy(self.weights, self._clean_obj(), **kwargs)
 
     def count(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
+        """Count observations weighted by the weights.
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis for the function to be applied on.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+            Weighted count of observations.
+        """
         obj = self._clean_obj()
 
         if skipna:
@@ -106,12 +126,56 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         return weights.sum(axis=axis)  # type: ignore[return-value]
 
     def sum(self, axis: "Axis" = 0, min_count: int = 0) -> "Series":
+        """Sum of values weighted by the weights.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis for the function to be applied on.
+        min_count : int, default 0
+            Minimum number of valid values required to perform the operation.
+
+        Returns
+        -------
+        Series
+            Weighted sum of values.
+        """
         return self.weighted().sum(axis=axis, min_count=min_count)  # type: ignore[return-value]
 
     def mean(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
+        """Mean of values weighted by the weights.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis for the function to be applied on.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+            Weighted mean of values.
+        """
         return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)  # type: ignore[return-value]
 
     def var(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> "Series":
+        """Variance of values weighted by the weights.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis for the function to be applied on.
+        ddof : int, default 1
+            Delta degrees of freedom.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+            Weighted variance of values.
+        """
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
         diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
@@ -119,6 +183,23 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         return diff_squared.sum(axis=axis) / (count - ddof)  # type: ignore[return-value]
 
     def std(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> "Series":
+        """Standard deviation of values weighted by the weights.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis for the function to be applied on.
+        ddof : int, default 1
+            Delta degrees of freedom.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+            Weighted standard deviation of values.
+        """
+
         return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
 
     @overload
@@ -185,6 +266,32 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine_kwargs: dict[str, bool] | None = None,
         **kwargs,
     ) -> "Series | DataFrame":
+        """Apply a function along the axis of the DataFrame.
+
+        Parameters
+        ----------
+        func : AggFuncType
+            The function to apply.
+        axis : Axis, optional
+            The axis to apply the function on, by default 0.
+        raw : bool, optional
+            Whether to pass the raw data to the function, by default False.
+        result_type : Literal["expand", "reduce", "broadcast"] | None, optional
+            The type of result to return, by default None.
+        args : tuple, optional
+            Additional arguments to pass to the function, by default ().
+        by_row : Literal[False, "compat"], optional
+            Whether to apply the function by row or by column, by default "compat".
+        engine : Literal["python", "numba"], optional
+            The engine to use for the operation, by default "python".
+        engine_kwargs : dict[str, bool] | None, optional
+            Additional keyword arguments for the engine, by default None.
+
+        Returns
+        -------
+        Series | DataFrame
+            The result of the operation.
+        """
         return self.weighted().apply(  # type: ignore
             func,  # type: ignore
             axis=axis,

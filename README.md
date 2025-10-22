@@ -27,7 +27,7 @@ If a column name is provided, it must exist in the `DataFrame`, and the results 
 > [!important]
 > Only numeric columns are supported when using weights. Non-numeric columns will be ignored during weighted operations. If using a `pandas.Series`, only numeric data is supported.
 
-Here is a simple example:
+### Examples
 
 ```python
 import pandas as pd
@@ -44,6 +44,10 @@ df = pd.DataFrame(data)  # or use `pandas_weights.DataFrame(data)` for typed `wt
 # perform a weighted average
 result = df.wt("weights").mean()
 print(result)
+
+# On a DataFrame you can also access specific columns after applying weights
+result_A = df.wt("weights")['A'].mean()
+result_AB = df.wt("weights")[['A', 'B']].mean()
 ```
 
 You can also pass an array of weights directly:
