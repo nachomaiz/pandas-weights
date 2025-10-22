@@ -15,6 +15,8 @@ if TYPE_CHECKING:
         GroupByObjectNonScalar,
         Scalar,
     )
+    
+    from pandas_weights.frame import DataFrame
 
 
 class _NoDefault(Enum):
@@ -94,8 +96,8 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         convertDType: bool = False,
         args: tuple = (),
         **kwargs,
-    ) -> float | pd.Series | pd.DataFrame:
-        return self.weighted().apply(  # type: ignore
+    ) -> "float | Series | DataFrame":
+        return self.weighted().apply(
             func,  # type: ignore
             axis=axis,
             convertDType=convertDType,
@@ -128,7 +130,7 @@ class WeightedSeriesGroupBy:
         if skipna:
             weights = self._groupby.obj.notna().mul(self.weights)
         else:
-            weights = pd.Series(self.weights, index=self._groupby.obj.index).fillna(1.0)
+            weights = self.weights.fillna(1.0)
         return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type]
 
     def sum(self, min_count: int = 0) -> Series:
@@ -151,7 +153,7 @@ class WeightedSeriesGroupBy:
     def std(self, ddof: int = 1, skipna: bool = True) -> Series:
         return self.var(ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
 
-    def apply(self, func: "AggFuncType", *args, **kwargs) -> pd.Series:
+    def apply(self, func: "AggFuncType", *args, **kwargs) -> Series:
         return (
             self._groupby.obj.mul(self.weights)
             .groupby(self._groupby._grouper)  # type: ignore[arg-type]

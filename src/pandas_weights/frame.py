@@ -19,6 +19,8 @@ if TYPE_CHECKING:
         WindowingEngineKwargs,
     )
 
+    from pandas_weights.series import Series
+
 
 class _NoDefault(Enum):
     no_default = object()
@@ -79,7 +81,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
         return WeightedFrameGroupBy(self.weights, self._clean_obj(), **kwargs)
 
-    def count(self, axis: "Axis" = 0, skipna: bool = True) -> pd.Series:
+    def count(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
         obj = self._clean_obj()
 
         if skipna:
@@ -90,23 +92,23 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
                 index=obj.index,
                 columns=obj.columns,
             ).fillna(1.0)
-        return weights.sum(axis=axis)
+        return weights.sum(axis=axis)  # type: ignore[return-value]
 
-    def sum(self, axis: "Axis" = 0, min_count: int = 0) -> pd.Series:
-        return self.weighted().sum(axis=axis, min_count=min_count)
+    def sum(self, axis: "Axis" = 0, min_count: int = 0) -> "Series":
+        return self.weighted().sum(axis=axis, min_count=min_count)  # type: ignore[return-value]
 
-    def mean(self, axis: "Axis" = 0, skipna: bool = True) -> pd.Series:
-        return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)
+    def mean(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
+        return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)  # type: ignore[return-value]
 
-    def var(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> pd.Series:
+    def var(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> "Series":
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
         diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
         diff_squared = diff.mul(diff)
-        return diff_squared.sum(axis=axis) / (count - ddof)
+        return diff_squared.sum(axis=axis) / (count - ddof)  # type: ignore[return-value]
 
-    def std(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> pd.Series:
-        return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)
+    def std(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> "Series":
+        return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
 
     @overload
     def apply(
@@ -120,7 +122,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = ...,
         engine_kwargs: dict[str, bool] | None = ...,
         **kwargs,
-    ) -> pd.Series: ...
+    ) -> "Series": ...
     @overload
     def apply(
         self,
@@ -133,7 +135,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = ...,
         engine_kwargs: dict[str, bool] | None = ...,
         **kwargs,
-    ) -> pd.DataFrame: ...
+    ) -> DataFrame: ...
     @overload
     def apply(
         self,
@@ -146,7 +148,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = ...,
         engine_kwargs: dict[str, bool] | None = ...,
         **kwargs,
-    ) -> pd.DataFrame: ...
+    ) -> DataFrame: ...
     @overload
     def apply(
         self,
@@ -159,7 +161,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = ...,
         engine_kwargs: dict[str, bool] | None = ...,
         **kwargs,
-    ) -> pd.Series: ...
+    ) -> "Series": ...
     def apply(
         self,
         func: "AggFuncType",
@@ -171,7 +173,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = "python",
         engine_kwargs: dict[str, bool] | None = None,
         **kwargs,
-    ) -> pd.Series | pd.DataFrame:
+    ) -> "Series | DataFrame":
         return self.weighted().apply(  # type: ignore
             func,  # type: ignore
             axis=axis,
@@ -208,7 +210,9 @@ class WeightedFrameGroupBy:
     def _broadcast_weights(self, skipna: bool = True) -> DataFrame:
         if skipna:
             return (  # type: ignore[arg-type,return-value]
-                self._groupby.obj.drop(columns=self._groupby.exclusions).notna().mul(self.weights, axis=0)
+                self._groupby.obj.drop(columns=self._groupby.exclusions)
+                .notna()
+                .mul(self.weights, axis=0)
             )
         return pd.DataFrame(  # type: ignore[return-value]
             np.broadcast_to(
@@ -340,7 +344,7 @@ class WeightedFrameGroupBy:
         engine: Literal["python", "numba"] = "python",
         engine_kwargs: dict[str, bool] | None = None,
         **kwargs,
-    ) -> pd.Series | pd.DataFrame:
+    ) -> "Series | DataFrame":
         return (
             self._weighted()
             .groupby(self._groupby._grouper)  # type: ignore[arg-type]
