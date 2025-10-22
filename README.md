@@ -24,7 +24,7 @@ You will need to define the weights for the aggregation or analysis you want to 
 
 If a column name is provided, it must exist in the `DataFrame`, and the results from aggregation functions will not include the weights column. In groupby operations, the weights column will not be included in the data.
 
-> [!note]
+> [!important]
 > Only numeric columns are supported when using weights. Non-numeric columns will be ignored during weighted operations. If using a `pandas.Series`, only numeric data is supported.
 
 Here is a simple example:
