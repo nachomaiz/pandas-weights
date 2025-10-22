@@ -117,7 +117,7 @@ def test_series_wt_groupby_init():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
     s = series.Series([10, 20, 30, 40], index=idx)
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
-    grouped = s.wt(weights).groupby("Group")
+    grouped = s.wt(weights).groupby("Group", axis=0, observed=False)
     assert isinstance(grouped, series.WeightedSeriesGroupBy)
     assert np.array_equal(grouped.weights, weights)
 
@@ -208,3 +208,34 @@ def test_series_wt_groupby_std():
         name=None,
     )
     pd.testing.assert_series_equal(grouped.std(), expected_std)
+
+
+def test_series_wt_apply():
+    s = pd.Series([10, 20, 30, 40], name="Value")
+    weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=s.index)
+
+    def add_two(value: float) -> float:
+        return value + 2
+
+    expected_apply_scalar = pd.Series([12.0, 42.0, 47.0, 102.0])
+    pd.testing.assert_series_equal(s.wt(weights).apply(add_two), expected_apply_scalar)
+
+
+def test_series_wt_groupby_apply():
+    df = pd.Series([10, 20, 30, 40], index=pd.Index(["A", "A", "B", "B"], name="Group"))
+    weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=df.index)
+
+    def weighted_minmax(series: pd.Series) -> pd.Series:
+        return pd.Series({"min": series.min(), "max": series.max()}, name="Value")
+
+    expected_apply_array = pd.Series(
+        [10.0, 40.0, 45.0, 100.0],
+        index=pd.MultiIndex.from_tuples(
+            [("A", "min"), ("A", "max"), ("B", "min"), ("B", "max")],
+            names=["Group", None],
+        ),
+    )
+    pd.testing.assert_series_equal(
+        df.wt(weights).groupby("Group").apply(weighted_minmax),
+        expected_apply_array,
+    )

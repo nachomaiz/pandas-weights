@@ -143,6 +143,8 @@ Currently, only the following aggregation functions are implemented:
   - `std()`
   - `apply(func, ...)`
   - `groupby(...)` (returns a weighted groupby object)
+  - `df.wt(...)[col]` (returns a weighted Series accessor for the specified column)
+  - `df.wt(...)[[col1, col2, ...]]` (returns a weighted DataFrame accessor for the specified columns)
 - Using `groupby` with the `wt` accessor:
   - `count()`
   - `mean()`
@@ -151,7 +153,7 @@ Currently, only the following aggregation functions are implemented:
   - `std()`
   - `apply(func, ...)`
   - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
-    - where `group_data` is the group's `DataFrame` with `.wt(...)` already applied.
+    - where `group_data` is a weighted DataFrame accessor to the group's data.
 
 > [!warning]
 > `.wt` and `.wt.groupby` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.

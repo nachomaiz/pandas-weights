@@ -1,4 +1,4 @@
-from collections.abc import Hashable, Iterator
+from collections.abc import Hashable, Iterator, Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Literal, Self, overload
 
@@ -7,6 +7,7 @@ import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
+from pandas_weights.series import WeightedSeriesAccessor
 from pandas_weights.typing_ import D1NumericArray
 
 if TYPE_CHECKING:
@@ -40,8 +41,18 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
             # self.obj = self.obj.drop(columns=weights)
         return self
 
-    def __getitem__(self, key: list[Hashable]) -> "WeightedDataFrameAccessor":
-        return WeightedDataFrameAccessor._init_validated(self.obj[key], self.weights)
+    @overload
+    def __getitem__(self, key: Hashable) -> "WeightedSeriesAccessor": ...
+    @overload
+    def __getitem__(self, key: Sequence[Hashable]) -> "WeightedDataFrameAccessor": ...
+    def __getitem__(
+        self, key: Hashable | Sequence[Hashable]
+    ) -> "WeightedDataFrameAccessor | WeightedSeriesAccessor":
+        if isinstance(key, list):
+            return WeightedDataFrameAccessor._init_validated(
+                self.obj[key], self.weights
+            )
+        return WeightedSeriesAccessor._init_validated(self.obj[key], self.weights)  # type: ignore[arg-type]
 
     def weighted(self) -> DataFrame:
         return self._clean_obj().mul(self.weights, axis=0)
@@ -333,30 +344,30 @@ class WeightedFrameGroupBy:
             ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs
         ).pow(0.5)
 
+    @overload
+    def apply(
+        self,
+        func: Callable[..., "Scalar"],
+        *args,
+        **kwargs,
+    ) -> "Series": ...
+    @overload
+    def apply(
+        self,
+        func: Callable[..., D1NumericArray],
+        *args,
+        **kwargs,
+    ) -> DataFrame: ...
     def apply(
         self,
         func: "AggFuncType",
-        axis: "Axis" = 0,
-        raw: bool = False,
-        result_type: Literal["expand", "reduce", "broadcast"] | None = None,
-        args: tuple = (),
-        by_row: Literal[False, "compat"] = "compat",
-        engine: Literal["python", "numba"] = "python",
-        engine_kwargs: dict[str, bool] | None = None,
+        *args,
         **kwargs,
     ) -> "Series | DataFrame":
+        numeric_cols = self._numeric_columns()
+
         return (
-            self._weighted()
+            self._weighted(numeric_cols)
             .groupby(self._groupby._grouper)  # type: ignore[arg-type]
-            .apply(
-                func,  # type: ignore[arg-type]
-                axis=axis,
-                raw=raw,
-                result_type=result_type,  # type: ignore[arg-type]
-                args=args,
-                by_row=by_row,
-                engine=engine,
-                engine_kwargs=engine_kwargs,
-                **kwargs,
-            )
+            .apply(func, *args, **kwargs)
         )

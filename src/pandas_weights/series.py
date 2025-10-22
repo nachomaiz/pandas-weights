@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         GroupByObjectNonScalar,
         Scalar,
     )
-    
+
     from pandas_weights.frame import DataFrame
 
 
@@ -92,15 +92,11 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def apply(
         self,
         func: "AggFuncType",
-        axis: "AxisIndex" = 0,
-        convertDType: bool = False,
         args: tuple = (),
         **kwargs,
     ) -> "float | Series | DataFrame":
         return self.weighted().apply(
             func,  # type: ignore
-            axis=axis,
-            convertDType=convertDType,
             args=args,
             **kwargs,
         )

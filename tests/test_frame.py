@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas_weights import frame
+from pandas_weights import frame, series
 
 
 def test_df_wt_error_on_no_weights_set():
@@ -132,7 +132,7 @@ def test_df_wt_groupby_init():
             "weights": [1.0, 2.0, 1.5, 2.5],
         }
     )
-    grouped = df.wt("weights").groupby("Group")
+    grouped = df.wt("weights").groupby("Group", observed=False, axis=0)
     assert isinstance(grouped, frame.WeightedFrameGroupBy)
     assert np.array_equal(grouped.weights, df["weights"])
 
@@ -250,11 +250,10 @@ def test_df_wt_groupby_std():
 def test_df_wt_apply():
     df = frame.DataFrame(
         {
-            "Group": ["A", "A", "B", "B"],
             "Value": [10, 20, 30, 40],
             "weights": [1.0, 2.0, 1.5, 2.5],
         }
-    ).set_index("Group")
+    )
 
     def weighted_range(series: pd.Series) -> float:
         return series.max() - series.min()
@@ -264,11 +263,51 @@ def test_df_wt_apply():
         df.wt("weights").apply(weighted_range), expected_apply_scalar
     )
 
-    def weighted_minmax(series: pd.Series) -> pd.Series:
-        return pd.Series({"min": series.min(), "max": series.max()})
 
-    expected_apply_array = pd.DataFrame({"Value": {"min": 10.0, "max": 100.0}})
+def test_df_wt_groupby_apply():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "B", "B"],
+            "Value": [10, 20, 30, 40],
+            "weights": [1.0, 2.0, 1.5, 2.5],
+        }
+    ).set_index("Group")
+
+    def weighted_minmax(dataframe: pd.DataFrame) -> pd.Series:
+        return pd.Series(
+            {"min": dataframe.min(axis=None), "max": dataframe.max(axis=None)}
+        )
+
+    expected_apply_array = pd.DataFrame(
+        {"A": {"min": 10.0, "max": 40.0}, "B": {"min": 45.0, "max": 100.0}}
+    ).T.rename_axis("Group")
     pd.testing.assert_frame_equal(
-        df.wt("weights").apply(weighted_minmax),
+        df.wt("weights").groupby("Group").apply(weighted_minmax),
         expected_apply_array,
     )
+
+
+def test_df_wt_getitem_column():
+    df = frame.DataFrame(
+        {
+            "A": [1, 2, 3],
+            "B": [4, 5, 6],
+            "weights": [0.5, 1.5, 2.0],
+        }
+    )
+    df_wt = df.wt("weights")
+    pd.testing.assert_series_equal(df_wt["A"].obj, df["A"])
+    assert isinstance(df_wt["A"], series.WeightedSeriesAccessor)
+
+
+def test_df_wt_getitem_columns():
+    df = frame.DataFrame(
+        {
+            "A": [1, 2, 3],
+            "B": [4, 5, 6],
+            "weights": [0.5, 1.5, 2.0],
+        }
+    )
+    df_wt = df.wt("weights")
+    pd.testing.assert_frame_equal(df_wt[["A", "B"]].obj, df[["A", "B"]])
+    assert isinstance(df_wt[["A", "B"]], frame.WeightedDataFrameAccessor)
