@@ -156,6 +156,8 @@ Currently, only the following aggregation functions are implemented:
   - `var()`
   - `std()`
   - `apply(func, ...)`
+  - `df.wt(...).groupby(...)[col]` (returns a weighted Series groupby object for the specified column)
+  - `df.wt(...).groupby(...)[[col1, col2, ...]]` (returns a weighted DataFrame groupby object for the specified columns)
   - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
     - where `group_data` is a weighted DataFrame accessor to the group's data.
 
