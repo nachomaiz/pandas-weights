@@ -1,12 +1,13 @@
 from collections.abc import Hashable, Iterator
 from enum import Enum
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Callable, Literal, Self, overload
 
 import numpy as np
 import pandas as pd
 from pandas.core.groupby import SeriesGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
+from pandas_weights.typing_ import D1NumericArray
 
 if TYPE_CHECKING:
     from pandas._typing import (
@@ -89,12 +90,26 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def std(self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True) -> float:
         return self.var(axis=axis, ddof=ddof, skipna=skipna) ** 0.5
 
+    @overload
+    def apply(
+        self,
+        func: Callable[..., "Scalar"],
+        args: tuple = ...,
+        **kwargs,
+    ) -> "Series": ...
+    @overload
+    def apply(
+        self,
+        func: Callable[..., D1NumericArray],
+        args: tuple = ...,
+        **kwargs,
+    ) -> "DataFrame": ...
     def apply(
         self,
         func: "AggFuncType",
         args: tuple = (),
         **kwargs,
-    ) -> "float | Series | DataFrame":
+    ) -> "Series | DataFrame":
         return self.weighted().apply(
             func,  # type: ignore
             args=args,
