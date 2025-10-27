@@ -38,5 +38,9 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
         if len(value) != len(self.obj):
             raise ValueError("Length of weights must match number of rows in the data.")
         if isinstance(value, np.ndarray) and value.ndim != 1:
-            raise ValueError("weights must be one-dimensional")
-        self._weights = pd.Series(value, index=self.obj.index)
+            raise ValueError("Weights must be one-dimensional")
+
+        if isinstance(value, pd.Series):
+            self._weights = value.reindex(self.obj.index)
+        else:
+            self._weights = pd.Series(value, index=self.obj.index)
