@@ -178,7 +178,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
-        diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
+        diff = self._clean_obj().sub(sum_ / count, axis=1 if axis == 0 else 0)
         diff_squared = diff.mul(diff)
         return diff_squared.sum(axis=axis) / (count - ddof)  # type: ignore[return-value]
 
