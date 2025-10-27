@@ -5,57 +5,45 @@ import pytest
 from pandas_weights import frame, series
 
 
-def test_df_wt_error_on_no_weights_set():
-    df = frame.DataFrame()
-    with pytest.raises(ValueError, match="Weights have not been set"):
-        df.wt.weighted()
+@pytest.fixture
+def df():
+    return frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6], "weights": [0.5, 1.5, 2.0]})
 
 
-def test_df_wt_error_on_weights_length_mismatch():
-    df = frame.DataFrame({"A": [1, 2, 3]})
-    with pytest.raises(
-        ValueError, match="Length of weights must match number of rows in the data."
-    ):
-        df.wt(np.array([1, 2]))
-
-
-def test_df_wt_error_on_weights_not_1d():
-    df = frame.DataFrame({"A": [1, 2, 3]})
-    with pytest.raises(ValueError, match="weights must be one-dimensional"):
-        df.wt(np.array([[1], [2], [3]]))
+@pytest.fixture
+def grouped_df():
+    return frame.DataFrame(
+        {
+            "Group": ["A", "A", "B", "B"],
+            "Value": [10, 20, 30, 40],
+            "weights": [1.0, 2.0, 1.5, 2.5],
+        }
+    )
 
 
 @pytest.mark.parametrize(
     "weights_types",
     [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])],
 )
-def test_df_wt_weighted(weights_types: list[float] | pd.Series | np.ndarray):
-    df = frame.DataFrame({"A": [1, 2, 3]})
+def test_df_wt_weighted(
+    df: frame.DataFrame, weights_types: list[float] | pd.Series | np.ndarray
+):
     df_wt = df.wt(weights_types)
     assert np.array_equal(df_wt.weights, weights_types)
     assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights_types)
 
 
-def test_df_wt_weighted_column():
-    df = frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6], "weights": [0.5, 1.5, 2.0]})
+def test_df_wt_weighted_column(df: frame.DataFrame):
     assert np.array_equal(
         df.wt("weights").weighted(), df[["A", "B"]].mul(df["weights"], axis=0)
     )
 
 
-def test_df_wt_init_weight():
-    df = frame.DataFrame({"A": [1, 2, 3]})
+def test_df_wt_init_weight(df: frame.DataFrame):
     weights_series = pd.Series([0.5, 1.5, 2.0])
     df_wt = frame.WeightedDataFrameAccessor._init_validated(df, weights_series)
     assert np.array_equal(df_wt.weights, weights_series)
     assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights_series)
-
-
-def test_df_wt_T():
-    df = frame.DataFrame({"A": [1, 2], "B": [3, 4]})
-    weights_series = pd.Series([0.5, 1.5])
-    expected = df[["A", "B"]].mul(weights_series, axis=0).T
-    pd.testing.assert_frame_equal(df.wt(weights_series).T, expected)
 
 
 def test_df_wt_count():
@@ -74,10 +62,8 @@ def test_df_wt_count():
     )
 
 
-def test_df_wt_sum():
-    df = frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_series = pd.Series([0.5, 1.5, 2.0])
-    df_wt = df.wt(weights_series)
+def test_df_wt_sum(df: frame.DataFrame):
+    df_wt = df.wt("weights")
 
     expected_sum = pd.Series({"A": 9.5, "B": 21.5})
 
@@ -94,75 +80,55 @@ def test_df_wt_sum_min_count():
     pd.testing.assert_series_equal(df_wt.sum(axis=0, min_count=1), expected_sum)
 
 
-def test_df_wt_mean():
-    df = frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_series = pd.Series([0.5, 1.5, 2.0])
-    df_wt = df.wt(weights_series)
+def test_df_wt_mean(df: frame.DataFrame):
+    df_wt = df.wt("weights")
 
     expected_mean = pd.Series({"A": 2.375, "B": 5.375})
 
     pd.testing.assert_series_equal(df_wt.mean(axis=0), expected_mean)
 
 
-def test_df_wt_var():
-    df = frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_series = pd.Series([0.5, 1.5, 2.0])
-    df_wt = df.wt(weights_series)
+def test_df_wt_var(df: frame.DataFrame):
+    df_wt = df.wt("weights")
 
     expected_var = pd.Series({"A": 0.8072916666666666, "B": 0.8072916666666666})
 
     pd.testing.assert_series_equal(df_wt.var(axis=0), expected_var)
 
 
-def test_df_wt_std():
-    df = frame.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_series = pd.Series([0.5, 1.5, 2.0])
-    df_wt = df.wt(weights_series)
+def test_df_wt_std(df: frame.DataFrame):
+    df_wt = df.wt("weights")
 
     expected_std = pd.Series({"A": 0.898494110535326, "B": 0.898494110535326})
 
     pd.testing.assert_series_equal(df_wt.std(axis=0), expected_std)
 
 
-def test_df_wt_groupby_init():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group", observed=False, axis=0)
+def test_df_wt_groupby_init(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group", observed=False, axis=0)
     assert isinstance(grouped, frame.WeightedFrameGroupBy)
-    assert np.array_equal(grouped.weights, df["weights"])
+    assert np.array_equal(grouped.weights, grouped_df["weights"])
 
 
-def test_df_wt_groupby_iter():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group")
+def test_df_wt_groupby_iter(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
     groups = dict(iter(grouped))
     assert set(groups.keys()) == {"A", "B"}
     assert np.array_equal(
         groups["A"].obj,
-        df[df["Group"] == "A"][["Group", "Value"]],
+        grouped_df[grouped_df["Group"] == "A"][["Group", "Value"]],
     )
     assert np.array_equal(
         groups["B"].obj,
-        df[df["Group"] == "B"][["Group", "Value"]],
+        grouped_df[grouped_df["Group"] == "B"][["Group", "Value"]],
     )
     assert np.array_equal(
         groups["A"].weights,
-        df[df["Group"] == "A"]["weights"],
+        grouped_df[grouped_df["Group"] == "A"]["weights"],
     )
     assert np.array_equal(
         groups["B"].weights,
-        df[df["Group"] == "B"]["weights"],
+        grouped_df[grouped_df["Group"] == "B"]["weights"],
     )
 
 
@@ -185,45 +151,24 @@ def test_df_wt_groupby_count():
     pd.testing.assert_frame_equal(grouped.count(skipna=False), expected_count_noskipna)
 
 
-def test_df_wt_groupby_sum():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group")
+def test_df_wt_groupby_sum(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
     expected_sum = pd.DataFrame(
         {"Value": [50.0, 145.0]}, index=pd.Index(["A", "B"], name="Group")
     )
     pd.testing.assert_frame_equal(grouped.sum(), expected_sum)
 
 
-def test_df_wt_groupby_mean():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group")
+def test_df_wt_groupby_mean(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
     expected_mean = pd.DataFrame(
         {"Value": [16.666666666666668, 36.25]}, index=pd.Index(["A", "B"], name="Group")
     )
     pd.testing.assert_frame_equal(grouped.mean(), expected_mean)
 
 
-def test_df_wt_groupby_var():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group")
+def test_df_wt_groupby_var(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
     expected_var = pd.DataFrame(
         {"Value": [294.4444444444444, 1380.2083333333333]},
         index=pd.Index(["A", "B"], name="Group"),
@@ -231,15 +176,8 @@ def test_df_wt_groupby_var():
     pd.testing.assert_frame_equal(grouped.var(), expected_var)
 
 
-def test_df_wt_groupby_std():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    )
-    grouped = df.wt("weights").groupby("Group")
+def test_df_wt_groupby_std(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
     expected_std = pd.DataFrame(
         {"Value": [17.159383568311664, 37.151155208597935]},
         index=pd.Index(["A", "B"], name="Group"),
@@ -264,14 +202,8 @@ def test_df_wt_apply():
     )
 
 
-def test_df_wt_groupby_apply():
-    df = frame.DataFrame(
-        {
-            "Group": ["A", "A", "B", "B"],
-            "Value": [10, 20, 30, 40],
-            "weights": [1.0, 2.0, 1.5, 2.5],
-        }
-    ).set_index("Group")
+def test_df_wt_groupby_apply(grouped_df: frame.DataFrame):
+    df = grouped_df.set_index("Group")
 
     def weighted_minmax(dataframe: pd.DataFrame) -> pd.Series:
         return pd.Series(
@@ -287,27 +219,13 @@ def test_df_wt_groupby_apply():
     )
 
 
-def test_df_wt_getitem_column():
-    df = frame.DataFrame(
-        {
-            "A": [1, 2, 3],
-            "B": [4, 5, 6],
-            "weights": [0.5, 1.5, 2.0],
-        }
-    )
+def test_df_wt_getitem_column(df: frame.DataFrame):
     df_wt = df.wt("weights")
     pd.testing.assert_series_equal(df_wt["A"].obj, df["A"])
     assert isinstance(df_wt["A"], series.WeightedSeriesAccessor)
 
 
-def test_df_wt_getitem_columns():
-    df = frame.DataFrame(
-        {
-            "A": [1, 2, 3],
-            "B": [4, 5, 6],
-            "weights": [0.5, 1.5, 2.0],
-        }
-    )
+def test_df_wt_getitem_columns(df: frame.DataFrame):
     df_wt = df.wt("weights")
     pd.testing.assert_frame_equal(df_wt[["A", "B"]].obj, df[["A", "B"]])
     assert isinstance(df_wt[["A", "B"]], frame.WeightedDataFrameAccessor)

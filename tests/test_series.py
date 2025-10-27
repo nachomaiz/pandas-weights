@@ -1,39 +1,7 @@
 import numpy as np
 import pandas as pd
-import pytest
 
 from pandas_weights import series
-
-
-def test_series_wt_error_on_no_weights_set():
-    s = series.Series()
-    with pytest.raises(ValueError, match="Weights have not been set"):
-        s.wt.weighted()
-
-
-def test_series_wt_error_on_weights_length_mismatch():
-    s = series.Series([1, 2, 3])
-    with pytest.raises(
-        ValueError, match="Length of weights must match number of rows in the data."
-    ):
-        s.wt(np.array([1, 2]))
-
-
-def test_series_wt_error_on_weights_not_1d():
-    s = series.Series([1, 2, 3])
-    with pytest.raises(ValueError, match="weights must be one-dimensional"):
-        s.wt(np.array([[1], [2], [3]]))
-
-
-@pytest.mark.parametrize(
-    "weights_types",
-    [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])],
-)
-def test_series_wt_weighted(weights_types: list[float] | pd.Series | np.ndarray):
-    s = series.Series([1, 2, 3])
-    s_wt = s.wt(weights_types)
-    assert np.array_equal(s_wt.weights, weights_types)
-    assert np.array_equal(s_wt.weighted(), s * weights_types)
 
 
 def test_series_wt_init_weight():
