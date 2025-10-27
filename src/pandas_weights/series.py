@@ -37,10 +37,6 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def weighted(self) -> Series:
         return self.obj.mul(self.weights)  # type: ignore[return-value]
 
-    @property
-    def T(self) -> Series:
-        return self.weighted().T
-
     def groupby(
         self,
         by: "Scalar | GroupByObjectNonScalar | pd.MultiIndex | None" = None,

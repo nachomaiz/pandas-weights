@@ -284,12 +284,8 @@ class WeightedFrameGroupBy:
         weights = self._broadcast_weights(skipna=skipna)
         return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type,return-value]
 
-    def _count_numeric(
-        self, skipna: bool = True, numeric_cols: pd.Index | None = None
-    ) -> DataFrame:
+    def _count_numeric(self, numeric_cols: pd.Index, skipna: bool = True) -> DataFrame:
         weights = self._broadcast_weights(skipna=skipna)
-        if numeric_cols is None:
-            numeric_cols = self._numeric_columns()
         return weights.groupby(self._groupby._grouper)[numeric_cols].sum()  # type: ignore[arg-type,return-value]
 
     def sum(
@@ -310,13 +306,11 @@ class WeightedFrameGroupBy:
     def _sum_weighted(
         self,
         weighted: pd.DataFrame,
-        numeric_cols: pd.Index | None = None,
+        numeric_cols: pd.Index,
         min_count: int = 0,
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
-        if numeric_cols is None:
-            numeric_cols = self._numeric_columns()
         return weighted.groupby(self._groupby._grouper)[numeric_cols].sum(  # type: ignore[arg-type, return-value]
             min_count=min_count,
             engine=engine,
@@ -333,7 +327,7 @@ class WeightedFrameGroupBy:
         weighted = self._weighted(numeric_cols)
         return self._sum_weighted(
             weighted, numeric_cols, engine=engine, engine_kwargs=engine_kwargs
-        ) / self._count_numeric(skipna=skipna, numeric_cols=numeric_cols)
+        ) / self._count_numeric(numeric_cols, skipna)
 
     def var(
         self,
@@ -352,7 +346,7 @@ class WeightedFrameGroupBy:
             engine=engine,
             engine_kwargs=engine_kwargs,
         )[numeric_cols]
-        count = self._count_numeric(skipna=skipna, numeric_cols=numeric_cols)
+        count = self._count_numeric(numeric_cols, skipna)
 
         diff = (
             weighted.reset_index()
@@ -396,10 +390,8 @@ class WeightedFrameGroupBy:
         *args,
         **kwargs,
     ) -> "Series | DataFrame":
-        numeric_cols = self._numeric_columns()
-
         return (
-            self._weighted(numeric_cols)
+            self._weighted()
             .groupby(self._groupby._grouper)  # type: ignore[arg-type]
             .apply(func, *args, **kwargs)
         )

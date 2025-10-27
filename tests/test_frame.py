@@ -229,3 +229,9 @@ def test_df_wt_getitem_columns(df: frame.DataFrame):
     df_wt = df.wt("weights")
     pd.testing.assert_frame_equal(df_wt[["A", "B"]].obj, df[["A", "B"]])
     assert isinstance(df_wt[["A", "B"]], frame.WeightedDataFrameAccessor)
+
+
+def test_df_wt_groupby_multiple_groupings(df: frame.DataFrame):
+    df = df.assign(Group=["X", "X", "Y"])
+    grouped = df.wt("weights").groupby(["A", "Group"])
+    assert isinstance(grouped._group_keys(), pd.MultiIndex)
