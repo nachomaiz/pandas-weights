@@ -89,6 +89,7 @@ def test_series_wt_groupby_iter():
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped: series.WeightedSeriesGroupBy = s.wt(weights).groupby("Group")
     groups = dict(iter(grouped))
+
     assert set(groups.keys()) == {"A", "B"}
     pd.testing.assert_series_equal(
         groups["A"].obj,

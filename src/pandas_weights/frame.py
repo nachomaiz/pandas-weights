@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
-from pandas_weights.series import WeightedSeriesAccessor
+from pandas_weights.series import WeightedSeriesAccessor, WeightedSeriesGroupBy
 from pandas_weights.typing_ import D1NumericArray
 
 if TYPE_CHECKING:
@@ -235,6 +235,13 @@ class WeightedFrameGroupBy:
         self._groupby = DataFrameGroupBy(*args, **kwargs)
         self.weights = weights
 
+    @classmethod
+    def _init_groupby(cls, weights: pd.Series, groupby: DataFrameGroupBy) -> Self:
+        obj = cls.__new__(cls)
+        obj._groupby = groupby
+        obj.weights = weights
+        return obj
+
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedDataFrameAccessor]]:
         for group_name, group_df in self._groupby:
             yield (
@@ -244,6 +251,17 @@ class WeightedFrameGroupBy:
                     self.weights.loc[group_df.index],
                 ),
             )
+
+    @overload
+    def __getitem__(self, key: "Hashable") -> "WeightedSeriesGroupBy": ...
+    @overload
+    def __getitem__(self, key: "Sequence[Hashable]") -> "WeightedFrameGroupBy": ...
+    def __getitem__(
+        self, key: "Hashable | Sequence[Hashable]"
+    ) -> "WeightedFrameGroupBy | WeightedSeriesGroupBy":
+        if isinstance(key, list):
+            return WeightedFrameGroupBy._init_groupby(self.weights, self._groupby[key])
+        return WeightedSeriesGroupBy._init_groupby(self.weights, self._groupby[key])  # type: ignore[arg-type]
 
     def _group_keys(self) -> pd.Index | pd.MultiIndex:
         if len(names := self._groupby._grouper.names) == 1:

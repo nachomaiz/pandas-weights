@@ -114,19 +114,19 @@ def test_df_wt_groupby_iter(grouped_df: frame.DataFrame):
     grouped = grouped_df.wt("weights").groupby("Group")
     groups = dict(iter(grouped))
     assert set(groups.keys()) == {"A", "B"}
-    assert np.array_equal(
+    pd.testing.assert_frame_equal(
         groups["A"].obj,
         grouped_df[grouped_df["Group"] == "A"][["Group", "Value"]],
     )
-    assert np.array_equal(
+    pd.testing.assert_frame_equal(
         groups["B"].obj,
         grouped_df[grouped_df["Group"] == "B"][["Group", "Value"]],
     )
-    assert np.array_equal(
+    pd.testing.assert_series_equal(
         groups["A"].weights,
         grouped_df[grouped_df["Group"] == "A"]["weights"],
     )
-    assert np.array_equal(
+    pd.testing.assert_series_equal(
         groups["B"].weights,
         grouped_df[grouped_df["Group"] == "B"]["weights"],
     )
@@ -235,3 +235,9 @@ def test_df_wt_groupby_multiple_groupings(df: frame.DataFrame):
     df = df.assign(Group=["X", "X", "Y"])
     grouped = df.wt("weights").groupby(["A", "Group"])
     assert isinstance(grouped._group_keys(), pd.MultiIndex)
+
+
+def test_df_wt_groupby_select_columns(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")
+    assert isinstance(grouped["Value"], series.WeightedSeriesGroupBy)
+    assert isinstance(grouped[["Value"]], frame.WeightedFrameGroupBy)

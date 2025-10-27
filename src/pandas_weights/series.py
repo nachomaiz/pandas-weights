@@ -118,6 +118,13 @@ class WeightedSeriesGroupBy:
         self._groupby = SeriesGroupBy(*args, **kwargs)
         self.weights = weights
 
+    @classmethod
+    def _init_groupby(cls, weights: pd.Series, groupby: SeriesGroupBy) -> Self:
+        obj = cls.__new__(cls)
+        obj._groupby = groupby
+        obj.weights = weights
+        return obj
+
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedSeriesAccessor]]:
         for key, group in self._groupby:
             yield (
