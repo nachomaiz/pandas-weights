@@ -8,6 +8,7 @@ wheels/
 .coverage*
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 
 # Virtual environments
 .venv
