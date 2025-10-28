@@ -126,12 +126,13 @@ class WeightedSeriesGroupBy:
         return obj
 
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedSeriesAccessor]]:
-        for key, group in self._groupby:
+        weights_groupby: SeriesGroupBy = self.weights.groupby(self._groupby._grouper)
+        for (key, group), (_, group_weights) in zip(self._groupby, weights_groupby):
             yield (
                 key,
                 WeightedSeriesAccessor._init_validated(
                     group,  # type: ignore[arg-type]
-                    self.weights.loc[key],
+                    group_weights,
                 ),
             )
 

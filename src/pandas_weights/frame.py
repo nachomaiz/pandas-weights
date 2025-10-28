@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Callable, Literal, Self, overload
 
 import numpy as np
 import pandas as pd
-from pandas.core.groupby import DataFrameGroupBy
+from pandas.core.groupby import DataFrameGroupBy, SeriesGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
 from pandas_weights.series import WeightedSeriesAccessor, WeightedSeriesGroupBy
@@ -243,12 +243,13 @@ class WeightedFrameGroupBy:
         return obj
 
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedDataFrameAccessor]]:
-        for group_name, group_df in self._groupby:
+        weights_groupby: SeriesGroupBy = self.weights.groupby(self._groupby._grouper)  # type: ignore[arg-type]
+        for (key, group), (_, group_weights) in zip(self._groupby, weights_groupby):
             yield (
-                group_name,
+                key,
                 WeightedDataFrameAccessor._init_validated(
-                    DataFrame(group_df),
-                    self.weights.loc[group_df.index],
+                    group,  # type: ignore[arg-type]
+                    group_weights,
                 ),
             )
 

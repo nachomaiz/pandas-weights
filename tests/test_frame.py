@@ -132,6 +132,29 @@ def test_df_wt_groupby_iter(grouped_df: frame.DataFrame):
     )
 
 
+def test_df_wt_groupby_iter_idx_group(grouped_df: frame.DataFrame):
+    grouped_df = grouped_df.set_index("Group")
+    grouped = grouped_df.wt("weights").groupby("Group")
+    groups = dict(iter(grouped))
+    assert set(groups.keys()) == {"A", "B"}
+    pd.testing.assert_frame_equal(
+        groups["A"].obj,
+        grouped_df.query("Group == 'A'")[["Value"]],
+    )
+    pd.testing.assert_frame_equal(
+        groups["B"].obj,
+        grouped_df.query("Group == 'B'")[["Value"]],
+    )
+    pd.testing.assert_series_equal(
+        groups["A"].weights,
+        grouped_df.query("Group == 'A'")["weights"],
+    )
+    pd.testing.assert_series_equal(
+        groups["B"].weights,
+        grouped_df.query("Group == 'B'")["weights"],
+    )
+
+
 def test_df_wt_groupby_count():
     df = frame.DataFrame(
         {
