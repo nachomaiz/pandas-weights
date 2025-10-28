@@ -27,6 +27,35 @@ If a column name is provided, it must exist in the `DataFrame`, and the results 
 > [!important]
 > Only numeric columns are supported when using weights. Non-numeric columns will be ignored during weighted operations. If using a `pandas.Series`, only numeric data is supported.
 
+### Supported Methods
+
+Currently, only the following functionality is implemented:
+
+- Using the `wt` accessor:
+  - `count()`
+  - `mean()`
+  - `sum()`
+  - `var()`
+  - `std()`
+  - `apply(func, ...)`
+  - `groupby(...)` (returns a weighted groupby object)
+  - `df.wt(...)[col]` (returns a weighted Series accessor for the specified column)
+  - `df.wt(...)[[col1, col2, ...]]` (returns a weighted DataFrame accessor for the specified columns)
+- Using `groupby` with the `wt` accessor:
+  - `count()`
+  - `mean()`
+  - `sum()`
+  - `var()`
+  - `std()`
+  - `apply(func, ...)`
+  - `df.wt(...).groupby(...)[col]` (returns a weighted Series groupby object for the specified column)
+  - `df.wt(...).groupby(...)[[col1, col2, ...]]` (returns a weighted DataFrame groupby object for the specified columns)
+  - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
+    - where `group_data` is a weighted DataFrame accessor to the group's data.
+
+> [!warning]
+> `.wt` and `.wt.groupby` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.
+
 ### Examples
 
 ```python
@@ -74,26 +103,7 @@ result = df.wt(weights).mean()
 print(result)
 ```
 
-Use the `.groupby` method to perform weighted aggregations on grouped data:
-
-```python
-import pandas as pd
-import pandas_weights
-
-# Create a sample DataFrame
-data = {
-    'Category': ['A', 'A', 'B', 'B', 'C'],
-    'Values': [10, 20, 30, 40, 50],
-    'weights': [1, 2, 3, 4, 5]
-}
-df = pd.DataFrame(data)
-
-# Perform weighted groupby operations
-result = df.wt("weights").groupby('Category').mean()
-print(result)
-```
-
-You can also perform the same operation using a `pandas.Series`:
+You can also perform the same operations using a `pandas.Series`:
 
 ```python
 import pandas as pd
@@ -135,34 +145,64 @@ result = df.wt("weights").apply(value_range)
 print(result)
 ```
 
-## Supported Functions
+### GroupBy Functionality
 
-Currently, only the following aggregation functions are implemented:
+Use the `.groupby` method on `pandas.Series` and `pandas.DataFrame` to perform weighted aggregations on grouped data:
 
-- Using the `wt` accessor:
-  - `count()`
-  - `mean()`
-  - `sum()`
-  - `var()`
-  - `std()`
-  - `apply(func, ...)`
-  - `groupby(...)` (returns a weighted groupby object)
-  - `df.wt(...)[col]` (returns a weighted Series accessor for the specified column)
-  - `df.wt(...)[[col1, col2, ...]]` (returns a weighted DataFrame accessor for the specified columns)
-- Using `groupby` with the `wt` accessor:
-  - `count()`
-  - `mean()`
-  - `sum()`
-  - `var()`
-  - `std()`
-  - `apply(func, ...)`
-  - `df.wt(...).groupby(...)[col]` (returns a weighted Series groupby object for the specified column)
-  - `df.wt(...).groupby(...)[[col1, col2, ...]]` (returns a weighted DataFrame groupby object for the specified columns)
-  - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
-    - where `group_data` is a weighted DataFrame accessor to the group's data.
+```python
+import pandas as pd
+import pandas_weights
 
-> [!warning]
-> `.wt` and `.wt.groupby` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.
+# Create a sample DataFrame
+data = {
+    'Category': ['A', 'A', 'B', 'B', 'C'],
+    'Values': [10, 20, 30, 40, 50],
+    'weights': [1, 2, 3, 4, 5]
+}
+df = pd.DataFrame(data)
+
+# Perform weighted groupby operations
+result = df.wt("weights").groupby('Category').mean()
+print(result)
+```
+
+Groupby iteration is also supported:
+
+```python
+import pandas as pd
+import pandas_weights
+
+# Create a sample DataFrame
+data = {
+    'Category': ['A', 'A', 'B', 'B', 'C'],
+    'Values': [10, 20, 30, 40, 50],
+    'weights': [1, 2, 3, 4, 5]
+}
+df = pd.DataFrame(data)
+
+# iterate over groups (group_data is a weighted DataFrame accessor)
+for group_name, group_data in df.wt("weights").groupby("Category"):
+    print(f"Group: {group_name}", f"Weighted Mean: {group_data.mean()}")
+```
+
+It's also possible to access specific columns after applying weights in a groupby operation:
+
+```python
+import pandas as pd
+import pandas_weights
+
+# Create a sample DataFrame
+data = {
+    'Category': ['A', 'A', 'B', 'B', 'C'],
+    'Values': [10, 20, 30, 40, 50],
+    'weights': [1, 2, 3, 4, 5]
+}
+df = pd.DataFrame(data)
+
+# Perform weighted groupby operations on specific column(s)
+result_values = df.wt("weights").groupby('Category')['Values'].mean()
+result_values_df = df.wt("weights").groupby('Category')[['Values']].mean()
+```
 
 ## Contributing
 
