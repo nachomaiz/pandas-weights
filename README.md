@@ -1,5 +1,7 @@
 # `pandas-weights`
 
+[![cov](https://nachomaiz.github.io/pandas-weights/badges/coverage.svg)](https://github.com/nachomaiz/pandas-weights/actions)
+
 `pandas-weights` is a Python library that extends the functionality of `pandas` by providing tools to handle weighted data in DataFrames. It allows users to easily apply weights to their data for statistical analysis and aggregation.
 
 The library introduces a new accessor, `wt`, which can be used on `pandas.DataFrame` and `pandas.Series` objects to perform weighted operations such as weighted mean, weighted sum, and more.

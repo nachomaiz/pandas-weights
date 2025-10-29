@@ -1,0 +1,56 @@
+name: test
+
+on:
+    workflow_dispatch:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    release:
+        types: [published]
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: 3.14
+
+            - name: Install dependencies with uv
+              run: uv sync
+
+            - name: Run Ruff lint
+              run: uvx ruff check .
+
+    test:
+        needs: lint
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: [3.9, 3.10, 3.11, 3.12, 3.13, 3.14]
+        steps:
+            - uses: actions/checkout@v5
+
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                  python-version: ${{ matrix.python-version }}
+
+            - name: Install dependencies with uv
+              run: uv sync --group test
+
+            - name: Run Ruff lint
+              run: uvx ruff check .
+
+            - name: Run tests with coverage
+              run: uv run pytest --cov=. --cov-branch --cov-report json
+
+            - name: Update Coverage Badge
+              # GitHub actions: default branch variable
+              # https://stackoverflow.com/questions/64781462/github-actions-default-branch-variable
+              if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+              uses: we-cli/coverage-badge-action@main
