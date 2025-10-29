@@ -18,7 +18,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "ipykernel>=7.0.1",
+    "ipykernel>=6.31",
     "mypy>=1.18.2",
     "pandas-stubs>=2.0",
 ]
