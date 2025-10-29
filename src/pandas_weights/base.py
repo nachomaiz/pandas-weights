@@ -1,12 +1,15 @@
-from typing import Self
+from typing import Generic, TypeVar, Union
 
 import numpy as np
 import pandas as pd
 
 from pandas_weights.typing_ import D1NumericArray
 
+T = TypeVar("T", pd.Series, pd.DataFrame)
+A = TypeVar("A", bound="BaseWeightedAccessor")
 
-class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
+
+class BaseWeightedAccessor(Generic[T]):
     """
     Base class for weight accessors.
 
@@ -18,10 +21,10 @@ class BaseWeightedAccessor[T: pd.Series | pd.DataFrame]:
 
     def __init__(self, pandas_obj: T) -> None:
         self.obj = pandas_obj
-        self._weights: pd.Series | None = None
+        self._weights: Union[pd.Series, None] = None
 
     @classmethod
-    def _init_validated(cls, pandas_obj: T, weights: pd.Series) -> Self:
+    def _init_validated(cls: type[A], pandas_obj: T, weights: pd.Series) -> A:
         self = cls(pandas_obj)
         self._weights = weights
 

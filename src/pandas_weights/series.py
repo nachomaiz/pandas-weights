@@ -1,8 +1,7 @@
 from collections.abc import Hashable, Iterator
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Literal, Self, overload
+from typing import TYPE_CHECKING, Callable, Literal, Union, overload
 
-import numpy as np
 import pandas as pd
 from pandas.core.groupby import SeriesGroupBy
 
@@ -30,7 +29,7 @@ class Series(pd.Series):
 
 @pd.api.extensions.register_series_accessor("wt")
 class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
-    def __call__(self, weights: list[int | float] | pd.Series | np.ndarray, /) -> Self:
+    def __call__(self, weights: D1NumericArray, /) -> "WeightedSeriesAccessor":
         self.weights = weights
         return self
 
@@ -39,13 +38,15 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
 
     def groupby(
         self,
-        by: "Scalar | GroupByObjectNonScalar | pd.MultiIndex | None" = None,
-        axis: "AxisIndex | Literal[_NoDefault.no_default]" = _NoDefault.no_default,
-        level: int | str | None = None,
+        by: Union["Scalar", "GroupByObjectNonScalar", pd.MultiIndex, None] = None,
+        axis: Union[
+            "AxisIndex", Literal[_NoDefault.no_default]
+        ] = _NoDefault.no_default,
+        level: Union[int, str, None] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
-        observed: bool | Literal[_NoDefault.no_default] = _NoDefault.no_default,
+        observed: Union[bool, Literal[_NoDefault.no_default]] = _NoDefault.no_default,
         dropna: bool = True,
     ) -> "WeightedSeriesGroupBy":
         kwargs = {
@@ -92,7 +93,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         func: Callable[..., "Scalar"],
         args: tuple = ...,
         **kwargs,
-    ) -> "Series": ...
+    ) -> Series: ...
     @overload
     def apply(
         self,
@@ -105,7 +106,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         func: "AggFuncType",
         args: tuple = (),
         **kwargs,
-    ) -> "Series | DataFrame":
+    ) -> Union[Series, "DataFrame"]:
         return self.weighted().apply(
             func,  # type: ignore
             args=args,
@@ -119,7 +120,9 @@ class WeightedSeriesGroupBy:
         self.weights = weights
 
     @classmethod
-    def _init_groupby(cls, weights: pd.Series, groupby: SeriesGroupBy) -> Self:
+    def _init_groupby(
+        cls, weights: pd.Series, groupby: SeriesGroupBy
+    ) -> "WeightedSeriesGroupBy":
         obj = cls.__new__(cls)
         obj._groupby = groupby
         obj.weights = weights
@@ -128,15 +131,9 @@ class WeightedSeriesGroupBy:
     def __iter__(self) -> Iterator[tuple[Hashable, WeightedSeriesAccessor]]:
         weights_groupby: SeriesGroupBy = self.weights.groupby(self._groupby._grouper)
         for (key, group), (_, group_weights) in zip(self._groupby, weights_groupby):
-            yield (
-                key,
-                WeightedSeriesAccessor._init_validated(
-                    group,  # type: ignore[arg-type]
-                    group_weights,
-                ),
-            )
+            yield (key, WeightedSeriesAccessor._init_validated(group, group_weights))
 
-    def _group_keys(self) -> pd.Index | pd.MultiIndex:
+    def _group_keys(self) -> Union[pd.Index, pd.MultiIndex]:
         if len(names := self._groupby._grouper.names) == 1:
             return pd.Index(self._groupby.obj.reset_index()[names[0]])
         return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])

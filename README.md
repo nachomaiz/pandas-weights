@@ -8,6 +8,8 @@ The project utilizes native `pandas` vectorized operations as much as possible t
 
 ## Installation
 
+`pandas-weights` requires Python 3.9 or higher and depends on `pandas` and `numpy`. This library will target `pandas` supported Python versions.
+
 You can install `pandas-weights` using pip:
 
 ```bash
