@@ -37,11 +37,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies with uv
-        run: uv sync --frozen --group test
-
       - name: Run tests with coverage
-        run: uv run pytest --cov=. --cov-branch --cov-report json
+        run: uv run --frozen --group test pytest --cov=. --cov-branch --cov-report json
 
       - name: Update Coverage Badge
         # GitHub actions: default branch variable
