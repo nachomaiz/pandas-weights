@@ -34,6 +34,15 @@ def test_df_wt_weighted(
     assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights_types)
 
 
+def test_df_wt_weighted_na_weight(df: frame.DataFrame):
+    weights_with_na = pd.Series([0.5, None, 2.0])
+    na_weight = 1.0
+    df_wt = df.wt(weights_with_na, na_weight=na_weight)
+    expected_weights = pd.Series([0.5, na_weight, 2.0])
+    assert np.array_equal(df_wt.weights, expected_weights)
+    assert np.array_equal(df_wt.weighted()["A"], df["A"] * expected_weights)
+
+
 def test_df_wt_weighted_column(df: frame.DataFrame):
     assert np.array_equal(
         df.wt("weights").weighted(), df[["A", "B"]].mul(df["weights"], axis=0)

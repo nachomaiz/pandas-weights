@@ -8,7 +8,7 @@ from pandas.core.groupby import DataFrameGroupBy, SeriesGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
 from pandas_weights.series import WeightedSeriesAccessor, WeightedSeriesGroupBy
-from pandas_weights.typing_ import D1NumericArray
+from pandas_weights.typing_ import D1NumericArray, Number
 
 if TYPE_CHECKING:
     from pandas._typing import (
@@ -34,12 +34,19 @@ class DataFrame(pd.DataFrame):
 @pd.api.extensions.register_dataframe_accessor("wt")
 class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     def __call__(
-        self, weights: Union[Hashable, D1NumericArray], /
+        self,
+        weights: Union[Hashable, D1NumericArray],
+        /,
+        na_weight: Union[Number, None] = None,
     ) -> "WeightedDataFrameAccessor":
         if isinstance(weights, (list, pd.Series, np.ndarray)):
             self.weights = weights
         else:
             self._weights = self.obj[weights]  # we know it's the right length
+
+        if na_weight is not None:
+            self._weights = self.weights.fillna(na_weight)
+
         return self
 
     @overload

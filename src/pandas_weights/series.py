@@ -6,7 +6,7 @@ import pandas as pd
 from pandas.core.groupby import SeriesGroupBy
 
 from pandas_weights.base import BaseWeightedAccessor
-from pandas_weights.typing_ import D1NumericArray
+from pandas_weights.typing_ import D1NumericArray, Number
 
 if TYPE_CHECKING:
     from pandas._typing import (
@@ -29,8 +29,13 @@ class Series(pd.Series):
 
 @pd.api.extensions.register_series_accessor("wt")
 class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
-    def __call__(self, weights: D1NumericArray, /) -> "WeightedSeriesAccessor":
+    def __call__(
+        self, weights: D1NumericArray, /, na_weight: Union[Number, None] = None
+    ) -> "WeightedSeriesAccessor":
         self.weights = weights
+        if na_weight is not None:
+            self._weights = self.weights.fillna(na_weight)
+
         return self
 
     def weighted(self) -> Series:

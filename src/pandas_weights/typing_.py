@@ -3,4 +3,5 @@ from typing import Union
 import numpy as np
 import pandas as pd
 
-D1NumericArray = Union[list[Union[bool, int, float]], pd.Series, np.ndarray]
+Number = Union[bool, int, float]
+D1NumericArray = Union[list[Number], pd.Series, np.ndarray]

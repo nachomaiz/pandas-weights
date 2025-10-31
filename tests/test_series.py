@@ -12,6 +12,16 @@ def test_series_wt_init_weight():
     assert np.array_equal(s_wt.weighted(), s * weights_series)
 
 
+def test_series_wt_weighted_na_weight():
+    s = series.Series([1, 2, 3])
+    weights_with_na = pd.Series([0.5, None, 2.0])
+    na_weight = 1.0
+    s_wt = s.wt(weights_with_na, na_weight=na_weight)
+    expected_weights = pd.Series([0.5, na_weight, 2.0])
+    assert np.array_equal(s_wt.weights, expected_weights)
+    assert np.array_equal(s_wt.weighted(), s * expected_weights)
+
+
 def test_series_wt_count():
     s = series.Series([1, 2, np.nan])
     weights_series = pd.Series([0.5, 1.5, 2.0])
