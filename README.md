@@ -107,7 +107,27 @@ result = df.wt(weights).mean()
 print(result)
 ```
 
-You can also perform the same operations using a `pandas.Series`:
+There's an option to set a default weight for missing weight values using the `na_weight` parameter:
+
+```python
+import pandas as pd
+import pandas_weights
+
+# Create a sample DataFrame
+data = {
+    'A': [1, 2, 3],
+    'B': [4, 5, 6]
+}
+df = pd.DataFrame(data)
+
+# Define weights with a missing value
+weights_with_na = [0.5, None, 2.0]
+
+# Apply weights with a default weight for missing values
+df.wt(weights_with_na, na_weight=1.0)
+```
+
+The same operations are available when using a `pandas.Series`:
 
 ```python
 import pandas as pd
