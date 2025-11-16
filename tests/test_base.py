@@ -29,28 +29,6 @@ def test_get_weights_not_set():
     )
 
 
-def test_set_weights_incorrect_length():
-    df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_series = pd.Series([0.5, 1.5])  # Incorrect length
-
-    accessor = BaseWeightedAccessor(df)
-
-    with pytest.raises(
-        ValueError, match="Length of weights must match number of rows in the data."
-    ):
-        accessor.weights = weights_series
-
-
-def test_set_weights_not_1d():
-    df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
-    weights_array = np.array([[0.5], [1.5], [2.0]])  # Not 1-dimensional
-
-    accessor = BaseWeightedAccessor(df)
-
-    with pytest.raises(ValueError, match="Weights must be one-dimensional"):
-        accessor.weights = weights_array
-
-
 @pytest.mark.parametrize(
     "weights", [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])]
 )

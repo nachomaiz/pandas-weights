@@ -1,6 +1,5 @@
 from typing import Generic, TypeVar, Union
 
-import numpy as np
 import pandas as pd
 
 from pandas_weights.typing_ import D1NumericArray
@@ -17,6 +16,13 @@ class BaseWeightedAccessor(Generic[T]):
     ----------
     pandas_obj : Series or DataFrame
         The pandas object to which the accessor is attached.
+
+    Attributes
+    ----------
+    obj : Series or DataFrame
+        The pandas object to which the accessor is attached.
+    weights : Series
+        The weights associated with the pandas object.
     """
 
     def __init__(self, pandas_obj: T) -> None:
@@ -38,12 +44,7 @@ class BaseWeightedAccessor(Generic[T]):
 
     @weights.setter
     def weights(self, value: D1NumericArray) -> None:
-        if len(value) != len(self.obj):
-            raise ValueError("Length of weights must match number of rows in the data.")
-        if isinstance(value, np.ndarray) and value.ndim != 1:
-            raise ValueError("Weights must be one-dimensional")
-
         if isinstance(value, pd.Series):
-            self._weights = value.reindex(self.obj.index)
+            self._weights = value.set_axis(self.obj.index)
         else:
             self._weights = pd.Series(value, index=self.obj.index)
