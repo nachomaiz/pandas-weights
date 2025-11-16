@@ -33,12 +33,59 @@ class DataFrame(pd.DataFrame):
 
 @pd.api.extensions.register_dataframe_accessor("wt")
 class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
+    """DataFrame Weights Accessor
+
+    Initialize by calling the accessor with the weights column name or array-like of weights.
+
+    >>> df.wt('weights_column')
+    >>> df.wt([0.1, 0.5, 0.4, ...])
+
+    Attributes
+    ----------
+    weights : Series
+        The weights associated with the DataFrame.
+
+    Methods
+    -------
+    weighted() -> DataFrame
+        Get the DataFrame with applied weights.
+    groupby(...) -> WeightedFrameGroupBy
+        Perform a weighted groupby operation on the DataFrame.
+    count(...) -> Series
+        Count observations weighted by the weights.
+    sum(...) -> Series
+        Sum of values weighted by the weights.
+    mean(...) -> Series
+        Mean of values weighted by the weights.
+    var(...) -> Series
+        Variance of values weighted by the weights.
+    std(...) -> Series
+        Standard deviation of values weighted by the weights.
+    apply(func, ..., **kwargs) -> Series or DataFrame
+        Apply a function along the axis of the DataFrame.
+
+    """
+
     def __call__(
         self,
         weights: Union[Hashable, D1NumericArray],
         /,
         na_weight: Union[Number, None] = None,
     ) -> "WeightedDataFrameAccessor":
+        """Set weights for the DataFrame
+
+        Parameters
+        ----------
+        weights : Union[Hashable, D1NumericArray]
+            Weights column name within the DataFrame or array of weights
+        na_weight : Number, optional
+            Weight to fill missing weight values, by default None
+
+        Returns
+        -------
+        WeightedDataFrameAccessor
+            Initialized DataFrame Weights Accessor
+        """
         if isinstance(weights, (list, pd.Series, np.ndarray)):
             self.weights = weights
         else:
