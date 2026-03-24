@@ -99,15 +99,15 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     @overload
     def __getitem__(self, key: Hashable) -> "WeightedSeriesAccessor": ...
     @overload
-    def __getitem__(self, key: Sequence[Hashable]) -> "WeightedDataFrameAccessor": ...
+    def __getitem__(self, key: list[Hashable]) -> "WeightedDataFrameAccessor": ...
     def __getitem__(
-        self, key: Union[Hashable, Sequence[Hashable]]
+        self, key: Union[Hashable, list[Hashable]]
     ) -> Union["WeightedDataFrameAccessor", "WeightedSeriesAccessor"]:
         if isinstance(key, list):
             return WeightedDataFrameAccessor._init_validated(
                 self.obj[key], self.weights
             )
-        return WeightedSeriesAccessor._init_validated(self.obj[key], self.weights)  # type: ignore[arg-type]
+        return WeightedSeriesAccessor._init_validated(self.obj[key], self.weights)
 
     def weighted(self) -> DataFrame:
         """Get the DataFrame with applied weights
