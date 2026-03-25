@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
         Axis,
-        Level,
         GroupByObjectNonScalar,
+        Level,
         Scalar,
         WindowingEngine,
         WindowingEngineKwargs,
@@ -326,14 +326,9 @@ class WeightedFrameGroupBy:
             columns=self._groupby.exclusions, errors="ignore"
         )  # type: ignore[return-value]
         if skipna:
-            return (  # type: ignore[arg-type,return-value]
-                obj.notna().mul(self.weights, axis=0)
-            )
+            return obj.notna().mul(self.weights, axis=0)  # type: ignore[arg-type,return-value]
         return DataFrame(
-            np.broadcast_to(
-                np.asarray(self.weights).reshape(-1, 1),
-                obj.shape,
-            ),
+            np.broadcast_to(np.asarray(self.weights).reshape(-1, 1), obj.shape),
             index=self._groupby.obj.index,
             columns=obj.columns,
         ).fillna(1.0)
@@ -441,27 +436,14 @@ class WeightedFrameGroupBy:
         ).pow(0.5)
 
     @overload
-    def apply(
-        self,
-        func: Callable[..., "Scalar"],
-        *args,
-        **kwargs,
-    ) -> "Series": ...
+    def apply(self, func: Callable[..., "Scalar"], *args, **kwargs) -> "Series": ...
     @overload
     def apply(
-        self,
-        func: Callable[..., D1NumericArray],
-        *args,
-        **kwargs,
+        self, func: Callable[..., D1NumericArray], *args, **kwargs
     ) -> DataFrame: ...
-    def apply(
-        self,
-        func: "AggFuncType",
-        *args,
-        **kwargs,
-    ) -> Union["Series", DataFrame]:
+    def apply(self, func: "AggFuncType", *args, **kwargs) -> Union["Series", DataFrame]:
         return (
             self._weighted()
-            .groupby(self._groupby._grouper)  # type: ignore[arg-type]
+            .groupby(self._groupby._grouper)  # type: ignore[arg-type,return-value]
             .apply(func, *args, **kwargs)
         )

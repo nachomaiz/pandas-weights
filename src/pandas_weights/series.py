@@ -11,9 +11,9 @@ from pandas_weights.typing_ import D1NumericArray, Number
 if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
-        Level,
         AxisIndex,
         GroupByObjectNonScalar,
+        Level,
         Scalar,
     )
 
@@ -95,23 +95,14 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
 
     @overload
     def apply(
-        self,
-        func: Callable[..., "Scalar"],
-        args: tuple = ...,
-        **kwargs,
+        self, func: Callable[..., "Scalar"], args: tuple = ..., **kwargs
     ) -> Series: ...
     @overload
     def apply(
-        self,
-        func: Callable[..., D1NumericArray],
-        args: tuple = ...,
-        **kwargs,
+        self, func: Callable[..., D1NumericArray], args: tuple = ..., **kwargs
     ) -> "DataFrame": ...
     def apply(
-        self,
-        func: "AggFuncType",
-        args: tuple = (),
-        **kwargs,
+        self, func: "AggFuncType", args: tuple = (), **kwargs
     ) -> Union[Series, "DataFrame"]:
         return self.weighted().apply(func, args=args, **kwargs)  # type: ignore
 
@@ -145,10 +136,10 @@ class WeightedSeriesGroupBy:
             weights = self._groupby.obj.notna().mul(self.weights)
         else:
             weights = self.weights.fillna(1.0)
-        return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type]
+        return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type,return-value]
 
     def sum(self, min_count: int = 0) -> Series:
-        weighted = self._groupby.obj.mul(self.weights)  # type: ignore
+        weighted = self._groupby.obj.mul(self.weights)
         return weighted.groupby(self._groupby._grouper).sum(min_count=min_count)  # type: ignore[arg-type]
 
     def mean(self, skipna: bool = True) -> Series:
@@ -170,6 +161,6 @@ class WeightedSeriesGroupBy:
     def apply(self, func: "AggFuncType", *args, **kwargs) -> Series:
         return (
             self._groupby.obj.mul(self.weights)
-            .groupby(self._groupby._grouper)  # type: ignore[arg-type]
+            .groupby(self._groupby._grouper)  # type: ignore[arg-type,return-value]
             .apply(func, *args, **kwargs)
         )
