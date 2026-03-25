@@ -11,6 +11,7 @@ from pandas_weights.typing_ import D1NumericArray, Number
 if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
+        Level,
         AxisIndex,
         GroupByObjectNonScalar,
         Scalar,
@@ -47,7 +48,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         axis: Union[
             "AxisIndex", Literal[_NoDefault.no_default]
         ] = _NoDefault.no_default,
-        level: Union[int, str, None] = None,
+        level: Union["Level", None] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
@@ -112,11 +113,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         args: tuple = (),
         **kwargs,
     ) -> Union[Series, "DataFrame"]:
-        return self.weighted().apply(
-            func,  # type: ignore
-            args=args,
-            **kwargs,
-        )
+        return self.weighted().apply(func, args=args, **kwargs)  # type: ignore
 
 
 class WeightedSeriesGroupBy:
