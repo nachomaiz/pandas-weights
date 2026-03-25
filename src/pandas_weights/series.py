@@ -33,6 +33,20 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def __call__(
         self, weights: D1NumericArray, /, na_weight: Union[Number, None] = None
     ) -> "WeightedSeriesAccessor":
+        """Set weights for the Series
+
+        Parameters
+        ----------
+        weights : D1NumericArray
+            Array of weights
+        na_weight : Number, optional
+            Weight to fill missing weight values, by default None
+
+        Returns
+        -------
+        WeightedSeriesAccessor
+            Initialized Series Weights Accessor
+        """
         self.weights = weights
         if na_weight is not None:
             self._weights = self.weights.fillna(na_weight)
@@ -40,6 +54,13 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         return self
 
     def weighted(self) -> Series:
+        """Get the Series with applied weights
+
+        Returns
+        -------
+        Series
+            Series with applied weights
+        """
         return self.obj.mul(self.weights)  # type: ignore[return-value]
 
     def groupby(
@@ -55,6 +76,10 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         observed: Union[bool, Literal[_NoDefault.no_default]] = _NoDefault.no_default,
         dropna: bool = True,
     ) -> "WeightedSeriesGroupBy":
+        """Perform a weighted groupby operation on the Series.
+
+        See `pandas.Series.groupby` for more details on the parameters.
+        """
         kwargs = {
             "keys": by,
             "level": level,
@@ -71,6 +96,10 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         return WeightedSeriesGroupBy(self.weights, self.obj, **kwargs)
 
     def count(self, axis: "AxisIndex" = 0, skipna: bool = True) -> float:
+        """Count observations weighted by the weights
+
+        See `pandas.Series.count` for more details on the parameters.
+        """
         if skipna:
             weights = self.obj.notna().mul(self.weights, axis=0)
         else:
@@ -78,12 +107,24 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         return weights.sum(axis=axis)
 
     def sum(self, axis: "AxisIndex" = 0, min_count: int = 0) -> float:
+        """Sum observations weighted by the weights
+
+        See `pandas.Series.sum` for more details on the parameters.
+        """
+
         return self.weighted().sum(axis=axis, min_count=min_count)
 
     def mean(self, axis: "AxisIndex" = 0, skipna: bool = True) -> float:
+        """Calculate the mean of observations weighted by the weights
+
+        See `pandas.Series.mean` for more details on the parameters.
+        """
         return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)
 
     def var(self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True) -> float:
+        """Calculate the variance of observations weighted by the weights
+        
+        See `pandas.Series.var` for more details on the parameters."""
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
         diff = self.obj.sub(sum_ / count)
@@ -91,6 +132,10 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
         return diff_squared.sum(axis=axis) / (count - ddof)
 
     def std(self, axis: "AxisIndex" = 0, ddof: int = 1, skipna: bool = True) -> float:
+        """Calculate the standard deviation of observations weighted by the weights
+
+        See `pandas.Series.std` for more details on the parameters.
+        """
         return self.var(axis=axis, ddof=ddof, skipna=skipna) ** 0.5
 
     @overload
@@ -104,6 +149,10 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     def apply(
         self, func: "AggFuncType", args: tuple = (), **kwargs
     ) -> Union[Series, "DataFrame"]:
+        """Apply a function to observations weighted by the weights
+
+        See `pandas.Series.apply` for more details on the parameters.
+        """
         return self.weighted().apply(func, args=args, **kwargs)  # type: ignore
 
 
