@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from pandas._typing import (
         AggFuncType,
         Axis,
+        Level,
         GroupByObjectNonScalar,
         Scalar,
         WindowingEngine,
@@ -99,9 +100,9 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     @overload
     def __getitem__(self, key: Hashable) -> "WeightedSeriesAccessor": ...
     @overload
-    def __getitem__(self, key: list[Hashable]) -> "WeightedDataFrameAccessor": ...
+    def __getitem__(self, key: Sequence[Hashable]) -> "WeightedDataFrameAccessor": ...
     def __getitem__(
-        self, key: Union[Hashable, list[Hashable]]
+        self, key: Union[Hashable, Sequence[Hashable]]
     ) -> Union["WeightedDataFrameAccessor", "WeightedSeriesAccessor"]:
         if isinstance(key, list):
             return WeightedDataFrameAccessor._init_validated(
@@ -120,7 +121,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         return self._clean_obj().mul(self.weights, axis=0)
 
     def _clean_obj(self) -> DataFrame:
-        if (weights_col := self.weights.name) in self.obj.columns:
+        if (weights_col := self.weights.name) and weights_col in self.obj.columns:
             return self.obj.drop(columns=weights_col)  # type: ignore[return-value]
         return self.obj  # type: ignore[return-value]
 
@@ -128,7 +129,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         self,
         by: Union["Scalar", "GroupByObjectNonScalar", pd.MultiIndex, None] = None,
         axis: Union["Axis", Literal[_NoDefault.no_default]] = _NoDefault.no_default,
-        level: Union[int, str, None] = None,
+        level: Union["Level", None] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
@@ -305,9 +306,9 @@ class WeightedFrameGroupBy:
             yield (key, WeightedDataFrameAccessor._init_validated(group, group_weights))
 
     @overload
-    def __getitem__(self, key: "Hashable") -> "WeightedSeriesGroupBy": ...
+    def __getitem__(self, key: Hashable) -> "WeightedSeriesGroupBy": ...
     @overload
-    def __getitem__(self, key: "Sequence[Hashable]") -> "WeightedFrameGroupBy": ...
+    def __getitem__(self, key: Sequence[Hashable]) -> "WeightedFrameGroupBy": ...
     def __getitem__(
         self, key: Union[Hashable, Sequence[Hashable]]
     ) -> Union["WeightedFrameGroupBy", "WeightedSeriesGroupBy"]:
@@ -321,30 +322,29 @@ class WeightedFrameGroupBy:
         return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])
 
     def _broadcast_weights(self, skipna: bool = True) -> DataFrame:
+        obj = self._groupby._selected_obj.drop(
+            columns=self._groupby.exclusions, errors="ignore"
+        )  # type: ignore[return-value]
         if skipna:
             return (  # type: ignore[arg-type,return-value]
-                self._groupby.obj.drop(columns=self._groupby.exclusions)
-                .notna()
-                .mul(self.weights, axis=0)
+                obj.notna().mul(self.weights, axis=0)
             )
         return DataFrame(
             np.broadcast_to(
                 np.asarray(self.weights).reshape(-1, 1),
-                self._groupby.obj.drop(columns=self._groupby.exclusions).shape,
+                obj.shape,
             ),
             index=self._groupby.obj.index,
-            columns=self._groupby.obj.drop(columns=self._groupby.exclusions).columns,
+            columns=obj.columns,
         ).fillna(1.0)
 
     def _numeric_columns(self) -> pd.Index:
-        return (
-            self._groupby.obj.drop(columns=self._groupby.exclusions, errors="ignore")
-            .select_dtypes(include=["number", "bool"])
-            .columns
-        )
+        return self._groupby._selected_obj.select_dtypes(
+            include=["number", "bool"]
+        ).columns
 
     def _weighted(self, numeric_cols: Union[pd.Index, None] = None) -> DataFrame:
-        weighted = self._groupby.obj.copy()
+        weighted: pd.DataFrame = self._groupby._selected_obj  # type: ignore[assignment]
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
         weighted[numeric_cols] = weighted[numeric_cols].mul(self.weights, axis=0)
