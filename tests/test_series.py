@@ -121,14 +121,14 @@ def test_series_wt_groupby_iter():
 
 def test_series_wt_groupby_count():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
-    s = series.Series([10, 20, None, 40], index=idx).astype(float)
+    s = series.Series([10, 20, None, 40], index=idx, name="test").astype(float)
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_count_skipna = pd.Series(
-        [3.0, 2.5], index=pd.Index(["A", "B"], name="Group")
+        [3.0, 2.5], index=pd.Index(["A", "B"], name="Group"), name="test"
     )
     expected_count_noskipna = pd.Series(
-        [3.0, 4.0], index=pd.Index(["A", "B"], name="Group")
+        [3.0, 4.0], index=pd.Index(["A", "B"], name="Group"), name="test"
     )
     pd.testing.assert_series_equal(grouped.count(), expected_count_skipna)
     pd.testing.assert_series_equal(grouped.count(skipna=False), expected_count_noskipna)
@@ -136,48 +136,48 @@ def test_series_wt_groupby_count():
 
 def test_series_wt_groupby_sum():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
-    s = series.Series([10, 20, 30, 40], index=idx)
+    s = series.Series([10, 20, 30, 40], index=idx, name="test")
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_sum = pd.Series(
-        [50.0, 145.0], index=pd.Index(["A", "B"], name="Group"), name=None
+        [50.0, 145.0], index=pd.Index(["A", "B"], name="Group"), name="test"
     )
     pd.testing.assert_series_equal(grouped.sum(), expected_sum, check_series_type=False)
 
 
 def test_series_wt_groupby_mean():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
-    s = series.Series([10, 20, 30, 40], index=idx)
+    s = series.Series([10, 20, 30, 40], index=idx, name="test")
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_mean = pd.Series(
-        [16.666666666666668, 36.25], index=pd.Index(["A", "B"], name="Group"), name=None
+        [16.666666666666668, 36.25], index=pd.Index(["A", "B"], name="Group"), name="test"
     )
     pd.testing.assert_series_equal(grouped.mean(), expected_mean)
 
 
 def test_series_wt_groupby_var():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
-    s = series.Series([10, 20, 30, 40], index=idx)
+    s = series.Series([10, 20, 30, 40], index=idx, name="test")
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_var = pd.Series(
         [294.4444444444444, 1380.2083333333333],
         index=pd.Index(["A", "B"], name="Group"),
-        name=None,
+        name="test",
     )
     pd.testing.assert_series_equal(grouped.var(), expected_var)
 
 
 def test_series_wt_groupby_std():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
-    s = series.Series([10, 20, 30, 40], index=idx)
+    s = series.Series([10, 20, 30, 40], index=idx, name="test")
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_std = pd.Series(
         [17.159383568311664, 37.151155208597935],
         index=pd.Index(["A", "B"], name="Group"),
-        name=None,
+        name="test",
     )
     pd.testing.assert_series_equal(grouped.std(), expected_std)
 

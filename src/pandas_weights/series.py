@@ -136,24 +136,32 @@ class WeightedSeriesGroupBy:
             weights = self._groupby.obj.notna().mul(self.weights)
         else:
             weights = self.weights.fillna(1.0)
-        return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type,return-value]
+        return (
+            weights.groupby(self._groupby._grouper).sum().rename(self._groupby.obj.name)
+        )  # type: ignore[arg-type,return-value]
 
     def sum(self, min_count: int = 0) -> Series:
-        weighted = self._groupby.obj.mul(self.weights)
-        return weighted.groupby(self._groupby._grouper).sum(min_count=min_count)  # type: ignore[arg-type]
+        weighted = self._groupby.obj.mul(self.weights)  # type: ignore[arg-type]
+        return (
+            weighted.groupby(self._groupby._grouper)
+            .sum(min_count=min_count)
+            .rename(self._groupby.obj.name)
+        )  # type: ignore[arg-type]
 
     def mean(self, skipna: bool = True) -> Series:
         return self.sum(min_count=1) / self.count(skipna=skipna)  # type: ignore[return-value]
 
     def var(self, ddof: int = 1, skipna: bool = True) -> Series:
-        weighted = self._groupby.obj.mul(self.weights)
+        weighted = self._groupby.obj.mul(self.weights)  # type: ignore[arg-type]
         sum_ = self.sum(min_count=1)
         count = self.count(skipna=skipna)
         diff = weighted.sub(
             (sum_ / count).loc[self._group_keys()].set_axis(self._groupby.obj.index)
         )
         diff_squared = diff.mul(diff)
-        return diff_squared.groupby(self._groupby._grouper).sum() / (count - ddof)  # type: ignore[arg-type]
+        return (
+            diff_squared.groupby(self._groupby._grouper).sum() / (count - ddof)
+        ).rename(self._groupby.obj.name)  # type: ignore[arg-type]
 
     def std(self, ddof: int = 1, skipna: bool = True) -> Series:
         return self.var(ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]

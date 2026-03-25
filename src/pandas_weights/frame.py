@@ -334,9 +334,13 @@ class WeightedFrameGroupBy:
         ).fillna(1.0)
 
     def _numeric_columns(self) -> pd.Index:
-        return self._groupby._selected_obj.select_dtypes(
-            include=["number", "bool"]
-        ).columns
+        return (
+            self._groupby._selected_obj.drop(
+                columns=self._groupby.exclusions, errors="ignore"
+            )
+            .select_dtypes(include=["number", "bool"])
+            .columns
+        )
 
     def _weighted(self, numeric_cols: Union[pd.Index, None] = None) -> DataFrame:
         weighted: pd.DataFrame = self._groupby._selected_obj  # type: ignore[assignment]

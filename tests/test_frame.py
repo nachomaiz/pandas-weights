@@ -201,6 +201,35 @@ def test_df_wt_groupby_mean(grouped_df: frame.DataFrame):
     pd.testing.assert_frame_equal(grouped.mean(), expected_mean)
 
 
+def test_df_wt_groupby_column_mean(grouped_df: frame.DataFrame):
+    grouped = grouped_df.wt("weights").groupby("Group")["Value"]
+    expected_mean = pd.Series(
+        {"A": 16.666666666666668, "B": 36.25},
+        index=pd.Index(["A", "B"], name="Group"),
+        name="Value",
+    )
+    pd.testing.assert_series_equal(grouped.mean(), expected_mean)
+
+
+def test_df_wt_groupby_numeric_groups_mean():
+    df = frame.DataFrame(
+        {
+            "Group": [1, 1, 2, 2],
+            "Value": [10, 20, np.nan, 40],
+            "weights": [1.0, 2.0, 1.5, 2.5],
+        }
+    )
+    grouped = df.wt("weights").groupby("Group")
+    expected_mean_skipna = pd.DataFrame(
+        {"Value": [16.666666666666668, 40]}, index=pd.Index([1, 2], name="Group")
+    )
+    expected_mean_noskipna = pd.DataFrame(
+        {"Value": [30, 62.5]}, index=pd.Index([1, 2], name="Group")
+    )
+    pd.testing.assert_frame_equal(grouped.mean(), expected_mean_skipna)
+    pd.testing.assert_frame_equal(grouped.mean(skipna=False), expected_mean_noskipna)
+
+
 def test_df_wt_groupby_var(grouped_df: frame.DataFrame):
     grouped = grouped_df.wt("weights").groupby("Group")
     expected_var = pd.DataFrame(
