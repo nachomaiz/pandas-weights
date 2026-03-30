@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, Union
+from typing import Generic, Optional, TypeVar
 
 import pandas as pd
 
@@ -25,12 +25,12 @@ class BaseWeightedAccessor(Generic[T]):
         The weights associated with the pandas object.
     """
 
-    def __init__(self, pandas_obj: T) -> None:
+    def __init__(self, pandas_obj: T, /) -> None:
         self.obj = pandas_obj
-        self._weights: Union[pd.Series, None] = None
+        self._weights: Optional[pd.Series] = None
 
     @classmethod
-    def _init_validated(cls: type[A], pandas_obj: T, weights: pd.Series) -> A:
+    def _init_validated(cls: type[A], pandas_obj: T, weights: Optional[pd.Series]) -> A:
         self = cls(pandas_obj)
         self._weights = weights
 
@@ -43,7 +43,7 @@ class BaseWeightedAccessor(Generic[T]):
         return self._weights
 
     @weights.setter
-    def weights(self, value: D1NumericArray) -> None:
+    def weights(self, value: D1NumericArray, /) -> None:
         if isinstance(value, pd.Series):
             self._weights = value.set_axis(self.obj.index)
         else:

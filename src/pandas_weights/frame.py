@@ -1,6 +1,6 @@
 from collections.abc import Hashable, Iterator, Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Literal, Union, overload
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Union, overload
 
 import numpy as np
 import pandas as pd
@@ -38,8 +38,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
     Initialize by calling the accessor with the weights column name or array-like of weights.
 
-    >>> df.wt('weights_column')
-    >>> df.wt([0.1, 0.5, 0.4, ...])
+    >>> df.wt("weights")  # "weights" column name within the DataFrame
+    >>> df.wt([0.1, 0.5, 0.4, ...])  # array-like of weights
 
     Attributes
     ----------
@@ -64,14 +64,13 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         Standard deviation of values weighted by the weights.
     apply(func, ..., **kwargs) -> Series or DataFrame
         Apply a function along the axis of the DataFrame.
-
     """
 
     def __call__(
         self,
         weights: Union[Hashable, D1NumericArray],
         /,
-        na_weight: Union[Number, None] = None,
+        na_weight: Optional[Number] = None,
     ) -> "WeightedDataFrameAccessor":
         """Set weights for the DataFrame
 
@@ -88,12 +87,12 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
             Initialized DataFrame Weights Accessor
         """
         if isinstance(weights, (list, pd.Series, np.ndarray)):
-            self.weights = weights
+            self._weights = pd.Series(weights, index=self.obj.index)
         else:
             self._weights = self.obj[weights]  # we know it's the right length
 
         if na_weight is not None:
-            self._weights = self.weights.fillna(na_weight)
+            self._weights = self._weights.fillna(na_weight)
 
         return self
 
@@ -106,9 +105,9 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     ) -> Union["WeightedDataFrameAccessor", "WeightedSeriesAccessor"]:
         if isinstance(key, list):
             return WeightedDataFrameAccessor._init_validated(
-                self.obj[key], self.weights
+                self.obj[key], self._weights
             )
-        return WeightedSeriesAccessor._init_validated(self.obj[key], self.weights)
+        return WeightedSeriesAccessor._init_validated(self.obj[key], self._weights)
 
     def weighted(self) -> DataFrame:
         """Get the DataFrame with applied weights
@@ -129,7 +128,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         self,
         by: Union["Scalar", "GroupByObjectNonScalar", pd.MultiIndex, None] = None,
         axis: Union["Axis", Literal[_NoDefault.no_default]] = _NoDefault.no_default,
-        level: Union["Level", None] = None,
+        level: Optional["Level"] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
@@ -159,6 +158,14 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """Count observations weighted by the weights.
 
         See `pandas.DataFrame.count` for more details on the parameters.
+
+        If `skipna` is True, missing values in the DataFrame are not counted towards
+        the total weight for that row/column.
+
+        If `skipna` is False, missing values are treated as having a weight of 1,
+        but missing weights are still treated as 0.
+        If including missing weights is desired, fill missing weights using
+        `df.wt(..., na_weight=1)`.
         """
         obj = self._clean_obj()
 
@@ -169,7 +176,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
                 np.broadcast_to(np.asarray(self.weights).reshape(-1, 1), obj.shape),
                 index=obj.index,
                 columns=obj.columns,
-            ).fillna(1.0)
+            )
         return weights.sum(axis=axis)  # type: ignore[return-value]
 
     def sum(self, axis: "Axis" = 0, min_count: int = 0) -> "Series":
@@ -183,6 +190,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """Mean of values weighted by the weights.
 
         See `pandas.DataFrame.mean` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
         """
         return self.sum(axis=axis, min_count=1) / self.count(axis=axis, skipna=skipna)  # type: ignore[return-value]
 
@@ -190,6 +199,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """Variance of values weighted by the weights.
 
         See `pandas.DataFrame.var` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
         """
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
@@ -201,6 +212,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """Standard deviation of values weighted by the weights.
 
         See `pandas.DataFrame.std` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
         """
 
         return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
@@ -211,11 +224,11 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         func: Callable[..., "Scalar"],
         axis: "Axis" = ...,
         raw: bool = ...,
-        result_type: Union[Literal["reduce"], None] = ...,
+        result_type: Optional[Literal["reduce"]] = ...,
         args: tuple = ...,
         by_row: Literal[False, "compat"] = ...,
         engine: Literal["python", "numba"] = ...,
-        engine_kwargs: Union[dict[str, bool], None] = ...,
+        engine_kwargs: Optional[dict[str, bool]] = ...,
         **kwargs,
     ) -> "Series": ...
     @overload
@@ -228,7 +241,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         args: tuple = ...,
         by_row: Literal[False, "compat"] = ...,
         engine: Literal["python", "numba"] = ...,
-        engine_kwargs: Union[dict[str, bool], None] = ...,
+        engine_kwargs: Optional[dict[str, bool]] = ...,
         **kwargs,
     ) -> DataFrame: ...
     @overload
@@ -241,7 +254,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         args: tuple = ...,
         by_row: Literal[False, "compat"] = ...,
         engine: Literal["python", "numba"] = ...,
-        engine_kwargs: Union[dict[str, bool], None] = ...,
+        engine_kwargs: Optional[dict[str, bool]] = ...,
         **kwargs,
     ) -> DataFrame: ...
     @overload
@@ -254,7 +267,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         args: tuple = ...,
         by_row: Literal[False, "compat"] = ...,
         engine: Literal["python", "numba"] = ...,
-        engine_kwargs: Union[dict[str, bool], None] = ...,
+        engine_kwargs: Optional[dict[str, bool]] = ...,
         **kwargs,
     ) -> "Series": ...
     def apply(
@@ -262,14 +275,16 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         func: "AggFuncType",
         axis: "Axis" = 0,
         raw: bool = False,
-        result_type: Union[Literal["expand", "reduce", "broadcast"], None] = None,
+        result_type: Optional[Literal["expand", "reduce", "broadcast"]] = None,
         args: tuple = (),
         by_row: Literal[False, "compat"] = "compat",
         engine: Literal["python", "numba"] = "python",
-        engine_kwargs: Union[dict[str, bool], None] = None,
+        engine_kwargs: Optional[dict[str, bool]] = None,
         **kwargs,
     ) -> Union["Series", DataFrame]:
         """Apply a function along the axis of the DataFrame.
+
+        The function is applied on the weighted data.
 
         See `pandas.DataFrame.apply` for more details on the parameters.
         """
@@ -331,7 +346,7 @@ class WeightedFrameGroupBy:
             np.broadcast_to(np.asarray(self.weights).reshape(-1, 1), obj.shape),
             index=self._groupby.obj.index,
             columns=obj.columns,
-        ).fillna(1.0)
+        )
 
     def _numeric_columns(self) -> pd.Index:
         return (
@@ -342,7 +357,7 @@ class WeightedFrameGroupBy:
             .columns
         )
 
-    def _weighted(self, numeric_cols: Union[pd.Index, None] = None) -> DataFrame:
+    def _weighted(self, numeric_cols: Optional[pd.Index] = None) -> DataFrame:
         weighted: pd.DataFrame = self._groupby._selected_obj  # type: ignore[assignment]
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
@@ -350,6 +365,19 @@ class WeightedFrameGroupBy:
         return weighted  # type: ignore[arg-type,return-value]
 
     def count(self, skipna: bool = True) -> DataFrame:
+        """Count of grouped observations with applied weights.
+
+        See `pandas.DataFrameGroupBy.count` for more details on the parameters.
+
+        If `skipna` is True, missing values in the DataFrame are not counted towards
+        the total weight for that row/column.
+
+        If `skipna` is False, missing values are treated as having a weight of 1,
+        but missing weights are still treated as 0.
+        If including missing weights is desired, fill missing weights using
+        `df.wt(..., na_weight=1)`.
+        """
+
         weights = self._broadcast_weights(skipna=skipna)
         return weights.groupby(self._groupby._grouper).sum()  # type: ignore[arg-type,return-value]
 
@@ -363,6 +391,11 @@ class WeightedFrameGroupBy:
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
+        """Sum of grouped values with applied weights.
+
+        See `pandas.DataFrameGroupBy.sum` for more details on the parameters.
+        """
+
         numeric_cols = self._numeric_columns()
         return self._sum_weighted(
             self._weighted(numeric_cols),
@@ -392,6 +425,12 @@ class WeightedFrameGroupBy:
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
+        """Mean of grouped values with applied weights.
+
+        See `pandas.DataFrameGroupBy.mean` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
         numeric_cols = self._numeric_columns()
         weighted = self._weighted(numeric_cols)
         return self._sum_weighted(
@@ -405,6 +444,12 @@ class WeightedFrameGroupBy:
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
+        """Variance of grouped values with applied weights.
+
+        See `pandas.DataFrameGroupBy.var` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
         numeric_cols = self._numeric_columns()
         group_keys = self._group_keys()
         weighted = self._weighted(numeric_cols)
@@ -435,6 +480,12 @@ class WeightedFrameGroupBy:
         engine: "WindowingEngine" = None,
         engine_kwargs: "WindowingEngineKwargs" = None,
     ) -> DataFrame:
+        """Standard deviation of grouped values with applied weights.
+
+        See `pandas.DataFrameGroupBy.std` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
         return self.var(
             ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs
         ).pow(0.5)
@@ -446,6 +497,12 @@ class WeightedFrameGroupBy:
         self, func: Callable[..., D1NumericArray], *args, **kwargs
     ) -> DataFrame: ...
     def apply(self, func: "AggFuncType", *args, **kwargs) -> Union["Series", DataFrame]:
+        """Apply a function to each group.
+
+        The function is applied on the weighted data.
+
+        See `pandas.DataFrameGroupBy.apply` for more details on the parameters.
+        """
         return (
             self._weighted()
             .groupby(self._groupby._grouper)  # type: ignore[arg-type,return-value]
