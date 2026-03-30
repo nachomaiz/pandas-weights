@@ -1,5 +1,3 @@
-from typing import Union
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -24,15 +22,13 @@ def grouped_df():
 
 
 @pytest.mark.parametrize(
-    "weights_types",
+    "weights",
     [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])],
 )
-def test_df_wt_weighted(
-    df: frame.DataFrame, weights_types: Union[list[float], pd.Series, np.ndarray]
-):
-    df_wt = df.wt(weights_types)
-    assert np.array_equal(df_wt.weights, weights_types)
-    assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights_types)
+def test_df_wt_weighted(df: frame.DataFrame, weights):
+    df_wt = df.wt(weights)
+    assert np.array_equal(df_wt.weights, weights)
+    assert np.array_equal(df_wt.weighted()["A"], df["A"] * weights)
 
 
 def test_df_wt_weighted_na_weight(df: frame.DataFrame):

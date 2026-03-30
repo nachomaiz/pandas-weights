@@ -1,5 +1,3 @@
-from typing import Union
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -30,9 +28,10 @@ def test_get_weights_not_set():
 
 
 @pytest.mark.parametrize(
-    "weights", [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])]
+    "weights",
+    [[0.5, 1.5, 2.0], pd.Series([0.5, 1.5, 2.0]), np.array([0.5, 1.5, 2.0])],
 )
-def test_set_weights_various_types(weights: Union[list[float], pd.Series, np.ndarray]):
+def test_set_weights_various_types(weights):
     df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
     accessor = BaseWeightedAccessor(df)
     accessor.weights = weights

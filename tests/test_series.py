@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from pandas_weights import series
 
@@ -10,6 +11,21 @@ def test_series_wt_init_weight():
     s_wt = series.WeightedSeriesAccessor._init_validated(s, weights_series)
     assert np.array_equal(s_wt.weights, weights_series)
     assert np.array_equal(s_wt.weighted(), s * weights_series)
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [
+        [0.5, 1.5, 2.0],
+        pd.Series([0.5, 1.5, 2.0]),
+        np.array([0.5, 1.5, 2.0]),
+    ],
+)
+def test_series_wt_weighted_types(weights):
+    s = series.Series([1, 2, 3])
+    s_wt = s.wt(weights)
+    assert np.array_equal(s_wt.weights, weights)
+    assert np.array_equal(s_wt.weighted(), s * pd.Series(weights, index=s.index))
 
 
 def test_series_wt_weighted_na_weight():
@@ -151,7 +167,9 @@ def test_series_wt_groupby_mean():
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_mean = pd.Series(
-        [16.666666666666668, 36.25], index=pd.Index(["A", "B"], name="Group"), name="test"
+        [16.666666666666668, 36.25],
+        index=pd.Index(["A", "B"], name="Group"),
+        name="test",
     )
     pd.testing.assert_series_equal(grouped.mean(), expected_mean)
 
