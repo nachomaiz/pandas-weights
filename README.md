@@ -1,7 +1,8 @@
 # `pandas-weights`
 
 [![CI status](https://github.com/nachomaiz/pandas-weights/actions/workflows/ci.yml/badge.svg)](https://github.com/nachomaiz/pandas-weights/actions/workflows/ci.yml)
-[![cov](https://nachomaiz.github.io/pandas-weights/badges/coverage.svg)](https://github.com/nachomaiz/pandas-weights/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/nachomaiz/pandas-weights)](https://github.com/nachomaiz/pandas-weights/releases)
+[![License](https://img.shields.io/github/license/nachomaiz/pandas-weights)](https://github.com/nachomaiz/pandas-weights/blob/main/LICENSE)
 
 `pandas-weights` is a Python library that extends the functionality of `pandas` by providing tools to handle weighted data in DataFrames. It allows users to easily apply weights to their data for statistical analysis and aggregation.
 
