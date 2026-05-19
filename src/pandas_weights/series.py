@@ -1,7 +1,8 @@
 from collections.abc import Hashable, Iterator
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Union, overload
+from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
 
+import numpy as np
 import pandas as pd
 from pandas.core.groupby import SeriesGroupBy
 
@@ -96,15 +97,12 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
 
     def groupby(
         self,
-        by: Union["Scalar", "GroupByObjectNonScalar", pd.MultiIndex, None] = None,
-        axis: Union[
-            "AxisIndex", Literal[_NoDefault.no_default]
-        ] = _NoDefault.no_default,
+        by: "Scalar | GroupByObjectNonScalar | pd.MultiIndex | None" = None,
         level: Optional["Level"] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
-        observed: Union[bool, Literal[_NoDefault.no_default]] = _NoDefault.no_default,
+        observed: bool | Literal[_NoDefault.no_default] = _NoDefault.no_default,
         dropna: bool = True,
     ) -> "WeightedSeriesGroupBy":
         """Perform a weighted groupby operation on the Series.
@@ -119,8 +117,6 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
             "group_keys": group_keys,
             "dropna": dropna,
         }
-        if axis is not _NoDefault.no_default:
-            kwargs["axis"] = axis
         if observed is not _NoDefault.no_default:
             kwargs["observed"] = observed
 
@@ -179,7 +175,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
 
         See `skipna` parameter in `count` method for how missing values are treated.
         """
-        return self.var(axis=axis, ddof=ddof, skipna=skipna) ** 0.5
+        return np.sqrt(self.var(axis=axis, ddof=ddof, skipna=skipna))
 
     @overload
     def apply(
@@ -191,7 +187,7 @@ class WeightedSeriesAccessor(BaseWeightedAccessor[Series]):
     ) -> "DataFrame": ...
     def apply(
         self, func: "AggFuncType", args: tuple = (), **kwargs
-    ) -> Union[Series, "DataFrame"]:
+    ) -> "Series | DataFrame":
         """Apply a function to observations weighted by the weights
 
         See `pandas.Series.apply` for more details on the parameters.
@@ -218,7 +214,7 @@ class WeightedSeriesGroupBy:
         for (key, group), (_, group_weights) in zip(self._groupby, weights_groupby):
             yield (key, WeightedSeriesAccessor._init_validated(group, group_weights))
 
-    def _group_keys(self) -> Union[pd.Index, pd.MultiIndex]:
+    def _group_keys(self) -> pd.Index | pd.MultiIndex:
         if len(names := self._groupby._grouper.names) == 1:
             return pd.Index(self._groupby.obj.reset_index()[names[0]])
         return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])
@@ -287,7 +283,7 @@ class WeightedSeriesGroupBy:
 
         See `skipna` parameter in `count` method for how missing values are treated.
         """
-        return self.var(ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
+        return np.sqrt(self.var(ddof=ddof, skipna=skipna))  # type: ignore[return-value]
 
     def apply(self, func: "AggFuncType", *args, **kwargs) -> Series:
         """Apply a function to observations in each group weighted by the weights

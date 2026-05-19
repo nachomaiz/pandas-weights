@@ -112,7 +112,7 @@ def test_df_wt_std(df: frame.DataFrame):
 
 
 def test_df_wt_groupby_init(grouped_df: frame.DataFrame):
-    grouped = grouped_df.wt("weights").groupby("Group", observed=False, axis=0)
+    grouped = grouped_df.wt("weights").groupby("Group", observed=False)
     assert isinstance(grouped, frame.WeightedFrameGroupBy)
     assert np.array_equal(grouped.weights, grouped_df["weights"])
 

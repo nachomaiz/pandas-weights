@@ -1,15 +1,15 @@
 [project]
 name = "pandas-weights"
-version = "0.1.0"
+version = "0.2.0"
 description = "Weighted aggregations with pandas"
 readme = "README.md"
 authors = [
     { name = "nachomaiz", email = "ignacio.maiz@gmail.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0",
-    "pandas>=2.0",
+    "pandas>=3.0",
 ]
 
 [build-system]
@@ -22,7 +22,7 @@ demo = [
 ]
 dev = [
     "mypy>=1.18.2",
-    "pandas-stubs>=2.0",
+    "pandas-stubs>=3.0",
 ]
 test = [
     "coverage>=6.0.0",

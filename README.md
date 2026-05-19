@@ -235,10 +235,46 @@ Contributions are welcome! If you would like to contribute to `pandas-weights`, 
 
 `pandas` functionality is very extensive, so if you would like to see support for additional *weighted* aggregation functions or features, please open an issue or submit a pull request.
 
+Some areas for potential contributions include:
+
+- Implementing additional weighted aggregation functions (e.g., weighted median, weighted quantiles, etc.)
+- Adding support for weighted correlation and covariance.
+- Adding support for weighted rolling and expanding window functions.
+- Improving performance of existing functions.
+- More aggregation functions for weighted and weighted groupby accessors.
+
+### Development Environment
+
+`pandas-weights` uses `uv` to manage the development environment and dependencies. You can use `uv` to create a virtual environment and install the required dependencies for development.
+
+To set up a development environment for `pandas-weights`, you can follow these steps:
+
+1. Clone the repository:
+
+    ```bash
+    git clone https://github.com/nachomaiz/pandas-weights.git
+    cd pandas-weights
+    ```
+
+1. Create a virtual environment and activate it:
+
+    ```bash
+    uv venv
+    uv activate
+    ```
+
+1. Install the development dependencies:
+
+    ```bash
+    uv sync --group dev --group test
+    ```
+
+1. You can now run tests and make changes to the code. To run tests, use:
+
+    ```bash
+    uv run pytest
+    ```
+
 ## License
 
 `pandas-weights` is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
-
-## Acknowledgements
-
-We would like to thank the developers of the `pandas` library for their incredible work, which serves as the foundation for `pandas-weights`.

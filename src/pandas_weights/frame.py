@@ -1,6 +1,6 @@
 from collections.abc import Hashable, Iterator, Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Union, overload
+from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
 
 import numpy as np
 import pandas as pd
@@ -68,7 +68,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
     def __call__(
         self,
-        weights: Union[Hashable, D1NumericArray],
+        weights: Hashable | D1NumericArray,
         /,
         na_weight: Optional[Number] = None,
     ) -> "WeightedDataFrameAccessor":
@@ -76,7 +76,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
         Parameters
         ----------
-        weights : Union[Hashable, D1NumericArray]
+        weights : Hashable | D1NumericArray
             Weights column name within the DataFrame or array of weights
         na_weight : Number, optional
             Weight to fill missing weight values, by default None
@@ -90,6 +90,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
             self._weights = pd.Series(weights, index=self.obj.index)
         else:
             self._weights = self.obj[weights]  # we know it's the right length
+            self.obj = self.obj.drop(columns=weights)
 
         if na_weight is not None:
             self._weights = self._weights.fillna(na_weight)
@@ -101,8 +102,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
     @overload
     def __getitem__(self, key: Sequence[Hashable]) -> "WeightedDataFrameAccessor": ...
     def __getitem__(
-        self, key: Union[Hashable, Sequence[Hashable]]
-    ) -> Union["WeightedDataFrameAccessor", "WeightedSeriesAccessor"]:
+        self, key: Hashable | Sequence[Hashable]
+    ) -> "WeightedDataFrameAccessor | WeightedSeriesAccessor":
         if isinstance(key, list):
             return WeightedDataFrameAccessor._init_validated(
                 self.obj[key], self._weights
@@ -117,22 +118,16 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         DataFrame
             DataFrame with applied weights
         """
-        return self._clean_obj().mul(self.weights, axis=0)
-
-    def _clean_obj(self) -> DataFrame:
-        if (weights_col := self.weights.name) and weights_col in self.obj.columns:
-            return self.obj.drop(columns=weights_col)  # type: ignore[return-value]
-        return self.obj  # type: ignore[return-value]
+        return self.obj.mul(self.weights, axis=0)  # type: ignore[return-value]
 
     def groupby(
         self,
-        by: Union["Scalar", "GroupByObjectNonScalar", pd.MultiIndex, None] = None,
-        axis: Union["Axis", Literal[_NoDefault.no_default]] = _NoDefault.no_default,
+        by: "Scalar | GroupByObjectNonScalar | pd.MultiIndex | None" = None,
         level: Optional["Level"] = None,
         as_index: bool = True,
         sort: bool = True,
         group_keys: bool = True,
-        observed: Union[bool, Literal[_NoDefault.no_default]] = _NoDefault.no_default,
+        observed: bool | Literal[_NoDefault.no_default] = _NoDefault.no_default,
         dropna: bool = True,
     ) -> "WeightedFrameGroupBy":
         """Perform a weighted groupby operation on the DataFrame.
@@ -147,12 +142,10 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
             "group_keys": group_keys,
             "dropna": dropna,
         }
-        if axis is not _NoDefault.no_default:
-            kwargs["axis"] = axis
         if observed is not _NoDefault.no_default:
             kwargs["observed"] = observed
 
-        return WeightedFrameGroupBy(self.weights, self._clean_obj(), **kwargs)
+        return WeightedFrameGroupBy(self.weights, self.obj, **kwargs)
 
     def count(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
         """Count observations weighted by the weights.
@@ -167,7 +160,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         If including missing weights is desired, fill missing weights using
         `df.wt(..., na_weight=1)`.
         """
-        obj = self._clean_obj()
+        obj = self.obj
 
         if skipna:
             weights = obj.notna().mul(self.weights, axis=0)
@@ -204,7 +197,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
-        diff = self._clean_obj().sub(sum_ / count, axis=1 if axis == 0 else 0)
+        diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
         diff_squared = diff.mul(diff)
         return diff_squared.sum(axis=axis) / (count - ddof)  # type: ignore[return-value]
 
@@ -216,7 +209,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         See `skipna` parameter in `count` method for how missing values are treated.
         """
 
-        return self.var(axis=axis, ddof=ddof, skipna=skipna).pow(0.5)  # type: ignore[return-value]
+        return np.sqrt(self.var(axis=axis, ddof=ddof, skipna=skipna))  # type: ignore[return-value]
 
     @overload
     def apply(
@@ -250,7 +243,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         func: Callable[..., D1NumericArray],
         axis: "Axis" = 0,
         raw: bool = ...,
-        result_type: Union[Literal["expand", "broadcast"], None] = ...,
+        result_type: Literal["expand", "broadcast"] | None = ...,
         args: tuple = ...,
         by_row: Literal[False, "compat"] = ...,
         engine: Literal["python", "numba"] = ...,
@@ -281,7 +274,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         engine: Literal["python", "numba"] = "python",
         engine_kwargs: Optional[dict[str, bool]] = None,
         **kwargs,
-    ) -> Union["Series", DataFrame]:
+    ) -> "Series | DataFrame":
         """Apply a function along the axis of the DataFrame.
 
         The function is applied on the weighted data.
@@ -325,13 +318,13 @@ class WeightedFrameGroupBy:
     @overload
     def __getitem__(self, key: Sequence[Hashable]) -> "WeightedFrameGroupBy": ...
     def __getitem__(
-        self, key: Union[Hashable, Sequence[Hashable]]
-    ) -> Union["WeightedFrameGroupBy", "WeightedSeriesGroupBy"]:
+        self, key: Hashable | Sequence[Hashable]
+    ) -> "WeightedFrameGroupBy | WeightedSeriesGroupBy":
         if isinstance(key, list):
             return WeightedFrameGroupBy._init_groupby(self.weights, self._groupby[key])
         return WeightedSeriesGroupBy._init_groupby(self.weights, self._groupby[key])  # type: ignore[arg-type]
 
-    def _group_keys(self) -> Union[pd.Index, pd.MultiIndex]:
+    def _group_keys(self) -> pd.Index | pd.MultiIndex:
         if len(names := self._groupby._grouper.names) == 1:
             return pd.Index(self._groupby.obj.reset_index()[names[0]])
         return pd.MultiIndex.from_frame(self._groupby.obj.reset_index()[names])
@@ -486,9 +479,9 @@ class WeightedFrameGroupBy:
 
         See `skipna` parameter in `count` method for how missing values are treated.
         """
-        return self.var(
-            ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs
-        ).pow(0.5)
+        return np.sqrt(
+            self.var(ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs)
+        )  # type: ignore[return-value]
 
     @overload
     def apply(self, func: Callable[..., "Scalar"], *args, **kwargs) -> "Series": ...
@@ -496,7 +489,7 @@ class WeightedFrameGroupBy:
     def apply(
         self, func: Callable[..., D1NumericArray], *args, **kwargs
     ) -> DataFrame: ...
-    def apply(self, func: "AggFuncType", *args, **kwargs) -> Union["Series", DataFrame]:
+    def apply(self, func: "AggFuncType", *args, **kwargs) -> "Series | DataFrame":
         """Apply a function to each group.
 
         The function is applied on the weighted data.

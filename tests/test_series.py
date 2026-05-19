@@ -104,7 +104,7 @@ def test_series_wt_groupby_init():
     idx = pd.MultiIndex.from_arrays([["A", "A", "B", "B"]], names=["Group"])
     s = series.Series([10, 20, 30, 40], index=idx)
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
-    grouped = s.wt(weights).groupby("Group", axis=0, observed=False)
+    grouped = s.wt(weights).groupby("Group", observed=False)
     assert isinstance(grouped, series.WeightedSeriesGroupBy)
     assert np.array_equal(grouped.weights, weights)
 
