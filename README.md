@@ -4,7 +4,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/nachomaiz/pandas-weights)](https://github.com/nachomaiz/pandas-weights/releases)
 [![License](https://img.shields.io/github/license/nachomaiz/pandas-weights)](https://github.com/nachomaiz/pandas-weights/blob/main/LICENSE)
 
-`pandas-weights` is a Python library that extends the functionality of `pandas` by providing tools to handle weighted data in DataFrames. It allows users to easily apply weights to their data for statistical analysis and aggregation.
+`pandas-weights` is a Python library that extends the functionality of [`pandas`](https://pandas.pydata.org/) by providing tools to handle weighted data in DataFrames. It allows users to easily apply weights to their data for statistical analysis and aggregation.
 
 The library introduces a new accessor, `wt`, which can be used on `pandas.DataFrame` and `pandas.Series` objects to perform weighted operations such as weighted mean, weighted sum, and more.
 
@@ -12,12 +12,20 @@ The project utilizes native `pandas` vectorized operations as much as possible t
 
 ## Installation
 
-`pandas-weights` requires Python 3.9 or higher and depends on `pandas` and `numpy`. This library will target `pandas` supported Python versions.
+`pandas-weights` requires Python 3.11 or higher and depends on `pandas` and `numpy`. This library will target [`pandas` supported Python versions](https://pandas.pydata.org/docs/getting_started/install.html#python-version-support).
 
-You can install `pandas-weights` using pip:
+Due to a change in the `pandas` API for custom accessors, `pandas-weights` is not compatible with `pandas` versions prior to 3.0.0.
 
-```bash
+Future releases will be able to be installed using `pip` or `uv`:
+
+```shell
 pip install pandas-weights
+```
+
+For now, you can install it directly from the GitHub repository:
+
+```shell
+pip install git+https://github.com/nachomaiz/pandas-weights.git
 ```
 
 ## Usage
@@ -31,11 +39,11 @@ You will need to define the weights for the aggregation or analysis you want to 
 If a column name is provided, it must exist in the `DataFrame`, and the results from aggregation functions will not include the weights column. In groupby operations, the weights column will not be included in the data.
 
 > [!important]
-> Only numeric columns are supported when using weights. Non-numeric columns will be ignored during weighted operations. If using a `pandas.Series`, only numeric data is supported.
+> Only numeric columns (`int`, `float`, `bool`) are supported when using weights. Non-numeric columns will be ignored during weighted operations. If using a `pandas.Series`, only numeric data is supported.
 
 ### Supported Methods
 
-Currently, only the following functionality is implemented:
+Currently, only the following functionality is implemented (both for `pandas.DataFrame` and `pandas.Series`):
 
 - Using the `wt` accessor:
   - `count()`
@@ -252,27 +260,27 @@ To set up a development environment for `pandas-weights`, you can follow these s
 
 1. Clone the repository:
 
-    ```bash
+    ```shell
     git clone https://github.com/nachomaiz/pandas-weights.git
     cd pandas-weights
     ```
 
 1. Create a virtual environment and activate it:
 
-    ```bash
+    ```shell
     uv venv
     uv activate
     ```
 
 1. Install the development dependencies:
 
-    ```bash
+    ```shell
     uv sync --group dev --group test
     ```
 
 1. You can now run tests and make changes to the code. To run tests, use:
 
-    ```bash
+    ```shell
     uv run pytest
     ```
 
