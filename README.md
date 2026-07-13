@@ -51,6 +51,8 @@ Currently, only the following functionality is implemented (both for `pandas.Dat
   - `sum()`
   - `var()`
   - `std()`
+  - `corr(...)`
+  - `resample(...)` (returns a weighted resampler object)
   - `apply(func, ...)`
   - `groupby(...)` (returns a weighted groupby object)
   - `df.wt(...)[col]` (returns a weighted Series accessor for the specified column)
@@ -61,14 +63,76 @@ Currently, only the following functionality is implemented (both for `pandas.Dat
   - `sum()`
   - `var()`
   - `std()`
+  - `corr(...)` for DataFrame groupby
+  - `corr(other, ...)` for Series groupby
   - `apply(func, ...)`
   - `df.wt(...).groupby(...)[col]` (returns a weighted Series groupby object for the specified column)
   - `df.wt(...).groupby(...)[[col1, col2, ...]]` (returns a weighted DataFrame groupby object for the specified columns)
   - `for group_name, group_data in df.wt(...).groupby(...): ...` (iterating over groups)
     - where `group_data` is a weighted DataFrame accessor to the group's data.
+- Using `resample` with the `wt` accessor:
+  - `count()`
+  - `mean()`
+  - `sum()`
+  - `var()`
+  - `std()`
 
 > [!warning]
-> `.wt` and `.wt.groupby` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.
+> `.wt`,  `.wt.groupby` and `.wt.resample` do not support all weighted aggregation functions that `pandas` provides. If you attempt to use an unsupported function, it will raise an `AttributeError`.
+
+> [!note]
+> For weighted Series groupby correlation (`series.wt(...).groupby(...).corr(other)`), index alignment follows `pandas` semantics.
+> The grouped Series and `other` are aligned by index within each group before correlation is computed.
+> When duplicate index labels are present, this can produce repeated pairings and results that may be surprising at first glance.
+
+Example with duplicate index labels:
+
+```python
+import pandas as pd
+import pandas_weights
+
+idx = pd.Index(["A", "A", "B", "B"], name="Group")
+s = pd.Series([1.0, 2.0, 3.0, 4.0], index=idx, name="values")
+weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
+other = pd.Series([2.0, 4.0, 8.0, 6.0], index=idx)
+
+# Correlation is computed per group after index alignment with `other`.
+# With duplicate labels, alignment can create repeated pairings.
+result = s.wt(weights).groupby("Group").corr(other)
+print(result)
+
+# Output
+# Group
+# A    0.0
+# B    0.0
+# Name: values, dtype: float64
+```
+
+If you want intuitive row-by-row pairing inside each group, make sure indices are unique within each group. For example, using a `MultiIndex`:
+
+```python
+import pandas as pd
+import pandas_weights
+
+idx = pd.MultiIndex.from_tuples(
+    [("A", 0), ("A", 1), ("B", 0), ("B", 1)],  # each row has a unique index within its group
+    names=["Group", "row_id"],
+)
+s = pd.Series([1.0, 2.0, 3.0, 4.0], index=idx, name="values")
+weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
+other = pd.Series([2.0, 4.0, 8.0, 6.0], index=idx)
+
+# Now alignment is one-to-one by (Group, row_id), so results match
+# the intuitive within-group pairings.
+result = s.wt(weights).groupby("Group").corr(other)
+print(result)
+
+# Output
+# Group
+# A    1.0
+# B   -1.0
+# Name: values, dtype: float64
+```
 
 ### Examples
 

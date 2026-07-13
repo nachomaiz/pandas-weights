@@ -98,7 +98,7 @@ def test_df_wt_mean(df: frame.DataFrame):
 def test_df_wt_var(df: frame.DataFrame):
     df_wt = df.wt("weights")
 
-    expected_var = pd.Series({"A": 0.8072916666666666, "B": 0.8072916666666666})
+    expected_var = pd.Series({"A": 0.6458333333333334, "B": 0.6458333333333334})
 
     pd.testing.assert_series_equal(df_wt.var(axis=0), expected_var)
 
@@ -106,7 +106,7 @@ def test_df_wt_var(df: frame.DataFrame):
 def test_df_wt_std(df: frame.DataFrame):
     df_wt = df.wt("weights")
 
-    expected_std = pd.Series({"A": 0.898494110535326, "B": 0.898494110535326})
+    expected_std = pd.Series({"A": 0.8036375634160796, "B": 0.8036375634160796})
 
     pd.testing.assert_series_equal(df_wt.std(axis=0), expected_std)
 
@@ -220,7 +220,7 @@ def test_df_wt_groupby_numeric_groups_mean():
         {"Value": [16.666666666666668, 40]}, index=pd.Index([1, 2], name="Group")
     )
     expected_mean_noskipna = pd.DataFrame(
-        {"Value": [30, 62.5]}, index=pd.Index([1, 2], name="Group")
+        {"Value": [16.666666666666668, 25.0]}, index=pd.Index([1, 2], name="Group")
     )
     pd.testing.assert_frame_equal(grouped.mean(), expected_mean_skipna)
     pd.testing.assert_frame_equal(grouped.mean(skipna=False), expected_mean_noskipna)
@@ -229,7 +229,7 @@ def test_df_wt_groupby_numeric_groups_mean():
 def test_df_wt_groupby_var(grouped_df: frame.DataFrame):
     grouped = grouped_df.wt("weights").groupby("Group")
     expected_var = pd.DataFrame(
-        {"Value": [294.4444444444444, 1380.2083333333333]},
+        {"Value": [33.333333333333314, 31.25]},
         index=pd.Index(["A", "B"], name="Group"),
     )
     pd.testing.assert_frame_equal(grouped.var(), expected_var)
@@ -238,7 +238,7 @@ def test_df_wt_groupby_var(grouped_df: frame.DataFrame):
 def test_df_wt_groupby_std(grouped_df: frame.DataFrame):
     grouped = grouped_df.wt("weights").groupby("Group")
     expected_std = pd.DataFrame(
-        {"Value": [17.159383568311664, 37.151155208597935]},
+        {"Value": [5.773502691896255, 5.5901699437494745]},
         index=pd.Index(["A", "B"], name="Group"),
     )
     pd.testing.assert_frame_equal(grouped.std(), expected_std)
@@ -300,3 +300,200 @@ def test_df_wt_groupby_select_columns(grouped_df: frame.DataFrame):
     grouped = grouped_df.wt("weights").groupby("Group")
     assert isinstance(grouped["Value"], series.WeightedSeriesGroupBy)
     assert isinstance(grouped[["Value"]], frame.WeightedFrameGroupBy)
+
+
+def test_df_wt_resample_sum_count_mean():
+    df = frame.DataFrame(
+        {
+            "Value": [1.0, 2.0, np.nan, 4.0],
+            "weights": [1.0, 2.0, 3.0, 4.0],
+        },
+        index=pd.date_range("2024-01-01", periods=4, freq="D"),
+    )
+
+    resampled = df.wt("weights").resample("2D")
+
+    expected_sum = pd.DataFrame(
+        {"Value": [5.0, 16.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+    expected_count_skipna = pd.DataFrame(
+        {"Value": [3.0, 4.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+    expected_count_noskipna = pd.DataFrame(
+        {"Value": [3.0, 7.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+    expected_mean = pd.DataFrame(
+        {"Value": [5.0 / 3.0, 4.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+
+    pd.testing.assert_frame_equal(resampled.sum(), expected_sum)
+    pd.testing.assert_frame_equal(resampled.count(), expected_count_skipna)
+    pd.testing.assert_frame_equal(
+        resampled.count(skipna=False), expected_count_noskipna
+    )
+    pd.testing.assert_frame_equal(resampled.mean(), expected_mean)
+
+
+def test_df_wt_resample_var_std():
+    df = frame.DataFrame(
+        {
+            "Value": [1.0, 2.0, np.nan, 4.0],
+            "weights": [1.0, 2.0, 3.0, 4.0],
+        },
+        index=pd.date_range("2024-01-01", periods=4, freq="D"),
+    )
+
+    resampled = df.wt("weights").resample("2D")
+
+    expected_var = pd.DataFrame(
+        {"Value": [1.0 / 3.0, 0.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+    expected_std = pd.DataFrame(
+        {"Value": [np.sqrt(1.0 / 3.0), 0.0]},
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+    )
+
+    pd.testing.assert_frame_equal(resampled.var(), expected_var)
+    pd.testing.assert_frame_equal(resampled.std(), expected_std)
+
+
+def test_df_wt_corr_perfect_linear_relationships():
+    df = frame.DataFrame(
+        {
+            "A": [1.0, 2.0, 3.0, 4.0],
+            "B": [2.0, 4.0, 6.0, 8.0],
+            "C": [4.0, 3.0, 2.0, 1.0],
+            "weights": [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+
+    corr = df.wt("weights").corr()
+    expected = pd.DataFrame(
+        {
+            "A": [1.0, 1.0, -1.0],
+            "B": [1.0, 1.0, -1.0],
+            "C": [-1.0, -1.0, 1.0],
+        },
+        index=["A", "B", "C"],
+    )
+
+    pd.testing.assert_frame_equal(corr, expected)
+
+
+def test_df_wt_corr_min_periods_and_numeric_only():
+    df = frame.DataFrame(
+        {
+            "A": [1.0, 2.0, 3.0, 4.0],
+            "B": [2.0, 4.0, np.nan, 8.0],
+            "C": [4.0, 3.0, 2.0, 1.0],
+            "Label": ["x", "y", "z", "w"],
+            "weights": [1.0, 1.0, 1.0, 1.0],
+        }
+    )
+
+    corr = df.wt("weights").corr(min_periods=4)
+    expected = pd.DataFrame(
+        {
+            "A": [1.0, np.nan, -1.0],
+            "B": [np.nan, np.nan, np.nan],
+            "C": [-1.0, np.nan, 1.0],
+        },
+        index=["A", "B", "C"],
+    )
+
+    pd.testing.assert_frame_equal(corr, expected)
+
+
+def test_df_wt_corr_unsupported_method():
+    df = frame.DataFrame({"A": [1.0, 2.0], "B": [2.0, 1.0], "weights": [1.0, 1.0]})
+
+    with pytest.raises(NotImplementedError):
+        df.wt("weights").corr(method="kendall")  # type: ignore[arg-type]
+
+
+def test_df_wt_groupby_corr_matrices():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "A", "B", "B", "B"],
+            "X": [1.0, 2.0, 3.0, 1.0, 2.0, 3.0],
+            "Y": [2.0, 4.0, 6.0, 3.0, 2.0, 1.0],
+            "Z": [3.0, 2.0, 1.0, 1.0, 2.0, 3.0],
+            "weights": [1.0, 2.0, 3.0, 1.5, 2.5, 3.5],
+        }
+    )
+
+    corr = df.wt("weights").groupby("Group").corr()
+
+    expected_a = pd.DataFrame(
+        {
+            "X": [1.0, 1.0, -1.0],
+            "Y": [1.0, 1.0, -1.0],
+            "Z": [-1.0, -1.0, 1.0],
+        },
+        index=["X", "Y", "Z"],
+    )
+    expected_b = pd.DataFrame(
+        {
+            "X": [1.0, -1.0, 1.0],
+            "Y": [-1.0, 1.0, -1.0],
+            "Z": [1.0, -1.0, 1.0],
+        },
+        index=["X", "Y", "Z"],
+    )
+    expected = pd.concat({"A": expected_a, "B": expected_b}, names=["Group"])
+
+    pd.testing.assert_frame_equal(corr, expected)
+
+
+def test_df_wt_groupby_corr_unsupported_method():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "B", "B"],
+            "X": [1.0, 2.0, 3.0, 4.0],
+            "Y": [2.0, 1.0, 4.0, 3.0],
+            "weights": [1.0, 1.0, 1.0, 1.0],
+        }
+    )
+
+    with pytest.raises(NotImplementedError):
+        df.wt("weights").groupby("Group").corr(method="kendall")  # type: ignore[arg-type]
+
+
+def test_df_wt_groupby_corr_min_periods_pairwise_complete():
+    df = frame.DataFrame(
+        {
+            "Group": ["A", "A", "A", "B", "B", "B"],
+            "X": [1.0, 2.0, 3.0, 1.0, 2.0, 3.0],
+            "Y": [2.0, 4.0, np.nan, 3.0, np.nan, 1.0],
+            "Z": [3.0, 2.0, 1.0, 1.0, 2.0, 3.0],
+            "Label": ["u", "v", "w", "x", "y", "z"],
+            "weights": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        }
+    )
+
+    corr = df.wt("weights").groupby("Group").corr(min_periods=3)
+
+    expected_a = pd.DataFrame(
+        {
+            "X": [1.0, np.nan, -1.0],
+            "Y": [np.nan, np.nan, np.nan],
+            "Z": [-1.0, np.nan, 1.0],
+        },
+        index=["X", "Y", "Z"],
+    )
+    expected_b = pd.DataFrame(
+        {
+            "X": [1.0, np.nan, 1.0],
+            "Y": [np.nan, np.nan, np.nan],
+            "Z": [1.0, np.nan, 1.0],
+        },
+        index=["X", "Y", "Z"],
+    )
+    expected = pd.concat({"A": expected_a, "B": expected_b}, names=["Group"])
+
+    pd.testing.assert_frame_equal(corr, expected)

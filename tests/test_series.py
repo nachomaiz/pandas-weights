@@ -85,7 +85,7 @@ def test_series_wt_var():
     weights_series = pd.Series([0.5, 1.5, 2.0])
     s_wt = s.wt(weights_series)
 
-    expected_var = 0.8072916666666666
+    expected_var = 0.6458333333333334
 
     assert s_wt.var() == expected_var
 
@@ -95,9 +95,36 @@ def test_series_wt_std():
     weights_series = pd.Series([0.5, 1.5, 2.0])
     s_wt = s.wt(weights_series)
 
-    expected_std = 0.898494110535326
+    expected_std = 0.8036375634160796
 
     assert s_wt.std() == expected_std
+
+
+def test_series_wt_corr():
+    idx = pd.Index([0, 1, 2, 3])
+    s = series.Series([1.0, 2.0, 3.0, 4.0], index=idx)
+    other = pd.Series([2.0, 4.0, 6.0, 8.0], index=idx)
+    weights = pd.Series([1.0, 2.0, 3.0, 4.0], index=idx)
+
+    assert s.wt(weights).corr(other) == pytest.approx(1.0)
+
+
+def test_series_wt_corr_alignment_and_min_periods():
+    s = series.Series([1.0, 2.0, 3.0], index=pd.Index([0, 1, 2]))
+    other = pd.Series([10.0, 20.0], index=pd.Index([0, 1]))
+    weights = pd.Series([1.0, 1.0, 1.0], index=s.index)
+
+    assert s.wt(weights).corr(other) == pytest.approx(1.0)
+    assert np.isnan(s.wt(weights).corr(other, min_periods=3))
+
+
+def test_series_wt_corr_unsupported_method():
+    s = series.Series([1.0, 2.0, 3.0])
+    other = pd.Series([3.0, 2.0, 1.0])
+    weights = pd.Series([1.0, 1.0, 1.0])
+
+    with pytest.raises(NotImplementedError):
+        s.wt(weights).corr(other, method="kendall")
 
 
 def test_series_wt_groupby_init():
@@ -180,7 +207,7 @@ def test_series_wt_groupby_var():
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_var = pd.Series(
-        [294.4444444444444, 1380.2083333333333],
+        [33.333333333333314, 31.25],
         index=pd.Index(["A", "B"], name="Group"),
         name="test",
     )
@@ -193,11 +220,60 @@ def test_series_wt_groupby_std():
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby("Group")
     expected_std = pd.Series(
-        [17.159383568311664, 37.151155208597935],
+        [5.773502691896255, 5.5901699437494745],
         index=pd.Index(["A", "B"], name="Group"),
         name="test",
     )
     pd.testing.assert_series_equal(grouped.std(), expected_std)
+
+
+def test_series_wt_groupby_corr():
+    idx = pd.Index(["A", "A", "B", "B"], name="Group")
+    s = series.Series([1.0, 2.0, 3.0, 4.0], index=idx, name="test")
+    other = pd.Series([2.0, 4.0, 8.0, 6.0], index=idx)
+    weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
+
+    grouped = s.wt(weights).groupby("Group")
+    expected = pd.Series(
+        [0.0, 0.0],
+        index=pd.Index(["A", "B"], name="Group"),
+        name="test",
+    )
+    pd.testing.assert_series_equal(grouped.corr(other), expected)
+
+
+def test_series_wt_groupby_corr_alignment_and_min_periods():
+    idx = pd.Index(["A", "A", "B", "B"], name="Group")
+    s = series.Series([1.0, 2.0, 3.0, 4.0], index=idx, name="test")
+    other = pd.Series([10.0, 20.0], index=pd.Index(["A", "A"]))
+    weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
+
+    grouped = s.wt(weights).groupby("Group")
+    expected_default = pd.Series(
+        [1.0, np.nan],
+        index=pd.Index(["A", "B"], name="Group"),
+        name="test",
+    )
+    expected_min_periods = pd.Series(
+        [np.nan, np.nan],
+        index=pd.Index(["A", "B"], name="Group"),
+        name="test",
+    )
+
+    pd.testing.assert_series_equal(grouped.corr(other), expected_default)
+    pd.testing.assert_series_equal(
+        grouped.corr(other, min_periods=3), expected_min_periods
+    )
+
+
+def test_series_wt_groupby_corr_unsupported_method():
+    idx = pd.Index(["A", "A", "B", "B"], name="Group")
+    s = series.Series([1.0, 2.0, 3.0, 4.0], index=idx)
+    other = pd.Series([4.0, 3.0, 2.0, 1.0], index=idx)
+    weights = pd.Series([1.0, 1.0, 1.0, 1.0], index=idx)
+
+    with pytest.raises(NotImplementedError):
+        s.wt(weights).groupby("Group").corr(other, method="kendall")
 
 
 def test_series_wt_apply():
@@ -239,3 +315,61 @@ def test_df_wt_groupby_multiple_groupings():
     weights = pd.Series([1.0, 2.0, 1.5, 2.5], index=idx)
     grouped = s.wt(weights).groupby(["Group", "Subgroup"])
     assert isinstance(grouped._group_keys(), pd.MultiIndex)
+
+
+def test_series_wt_resample_sum_count_mean():
+    idx = pd.date_range("2024-01-01", periods=4, freq="D")
+    s = series.Series([1.0, 2.0, np.nan, 4.0], index=idx, name="Value")
+    weights = pd.Series([1.0, 2.0, 3.0, 4.0], index=idx)
+
+    resampled = s.wt(weights).resample("2D")
+
+    expected_sum = pd.Series(
+        [5.0, 16.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+    expected_count_skipna = pd.Series(
+        [3.0, 4.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+    expected_count_noskipna = pd.Series(
+        [3.0, 7.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+    expected_mean = pd.Series(
+        [5.0 / 3.0, 4.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+
+    pd.testing.assert_series_equal(resampled.sum(), expected_sum)
+    pd.testing.assert_series_equal(resampled.count(), expected_count_skipna)
+    pd.testing.assert_series_equal(
+        resampled.count(skipna=False), expected_count_noskipna
+    )
+    pd.testing.assert_series_equal(resampled.mean(), expected_mean)
+
+
+def test_series_wt_resample_var_std():
+    idx = pd.date_range("2024-01-01", periods=4, freq="D")
+    s = series.Series([1.0, 2.0, np.nan, 4.0], index=idx, name="Value")
+    weights = pd.Series([1.0, 2.0, 3.0, 4.0], index=idx)
+
+    resampled = s.wt(weights).resample("2D")
+
+    expected_var = pd.Series(
+        [1.0 / 3.0, 0.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+    expected_std = pd.Series(
+        [np.sqrt(1.0 / 3.0), 0.0],
+        index=pd.date_range("2024-01-01", periods=2, freq="2D"),
+        name="Value",
+    )
+
+    pd.testing.assert_series_equal(resampled.var(), expected_var)
+    pd.testing.assert_series_equal(resampled.std(), expected_std)

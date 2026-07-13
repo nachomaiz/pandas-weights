@@ -1,3 +1,4 @@
+import datetime as dt
 from collections.abc import Hashable, Iterator, Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Callable, Literal, Optional, overload
@@ -6,6 +7,11 @@ import numpy as np
 import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy, SeriesGroupBy
 
+from pandas_weights._stats import (
+    weighted_correlation,
+    variance_from_weighted_moments,
+    weighted_sum_of_squares,
+)
 from pandas_weights.base import BaseWeightedAccessor
 from pandas_weights.series import WeightedSeriesAccessor, WeightedSeriesGroupBy
 from pandas_weights.typing_ import D1NumericArray, Number
@@ -19,7 +25,12 @@ if TYPE_CHECKING:
         Scalar,
         WindowingEngine,
         WindowingEngineKwargs,
+        Frequency,
+        TimedeltaConvertibleTypes,
+        TimeGrouperOrigin,
+        TimestampConvertibleTypes,
     )
+    from pandas.core.resample import Resampler
 
     from pandas_weights.series import Series
 
@@ -147,15 +158,44 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
         return WeightedFrameGroupBy(self.weights, self.obj, **kwargs)
 
+    def resample(
+        self,
+        rule: "Frequency | dt.timedelta",
+        closed: Literal["right", "left"] | None = None,
+        label: Literal["right", "left"] | None = None,
+        on: "Level | None" = None,
+        level: "Level | None" = None,
+        origin: "TimeGrouperOrigin | TimestampConvertibleTypes" = "start_day",
+        offset: "TimedeltaConvertibleTypes | None" = None,
+        group_keys: bool = False,
+    ) -> "WeightedFrameResampler":
+        """Perform a weighted resample operation on the DataFrame.
+
+        See `pandas.DataFrame.resample` for more details on the parameters.
+        """
+        return WeightedFrameResampler(
+            self.obj,
+            self.weights,
+            rule,
+            closed=closed,
+            label=label,
+            on=on,
+            level=level,
+            origin=origin,
+            offset=offset,
+            group_keys=group_keys,
+        )
+
     def count(self, axis: "Axis" = 0, skipna: bool = True) -> "Series":
         """Count observations weighted by the weights.
 
         See `pandas.DataFrame.count` for more details on the parameters.
 
-        If `skipna` is True, missing values in the DataFrame are not counted towards
+        If `skipna` is `True`, missing values in the DataFrame are not counted towards
         the total weight for that row/column.
 
-        If `skipna` is False, missing values are treated as having a weight of 1,
+        If `skipna` is `False`, missing values are treated as having a count of 1,
+        and weighted by the weights if available,
         but missing weights are still treated as 0.
         If including missing weights is desired, fill missing weights using
         `df.wt(..., na_weight=1)`.
@@ -197,9 +237,8 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """
         sum_ = self.sum(axis=axis, min_count=1)
         count = self.count(axis=axis, skipna=skipna)
-        diff = self.obj.sub(sum_ / count, axis=1 if axis == 0 else 0)
-        diff_squared = diff.mul(diff)
-        return diff_squared.sum(axis=axis) / (count - ddof)  # type: ignore[return-value]
+        sum_squared = weighted_sum_of_squares(self.obj, self.weights, axis=axis)
+        return variance_from_weighted_moments(sum_, sum_squared, count, ddof=ddof)  # type: ignore[return-value]
 
     def std(self, axis: "Axis" = 0, ddof: int = 1, skipna: bool = True) -> "Series":
         """Standard deviation of values weighted by the weights.
@@ -210,6 +249,40 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         """
 
         return np.sqrt(self.var(axis=axis, ddof=ddof, skipna=skipna))  # type: ignore[return-value]
+
+    def corr(
+        self,
+        method: Literal["pearson"] = "pearson",
+        min_periods: int = 1,
+        ddof: int = 1,
+    ) -> DataFrame:
+        """Pairwise weighted correlation of columns.
+
+        This method currently supports weighted Pearson correlation.
+        """
+        if method != "pearson":
+            raise NotImplementedError(
+                "Only 'pearson' weighted correlation is supported."
+            )
+
+        numeric = self.obj.select_dtypes(include=["number", "bool"])
+        columns = numeric.columns
+        result = pd.DataFrame(np.nan, index=columns, columns=columns, dtype=float)
+
+        for i, left_col in enumerate(columns):
+            for j in range(i, len(columns)):
+                right_col = columns[j]
+                corr = weighted_correlation(
+                    numeric[left_col],
+                    numeric[right_col],
+                    self.weights,
+                    ddof=ddof,
+                    min_periods=min_periods,
+                )
+                result.loc[left_col, right_col] = corr
+                result.loc[right_col, left_col] = corr
+
+        return DataFrame(result)
 
     @overload
     def apply(
@@ -294,6 +367,85 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
         )
 
 
+class WeightedFrameResampler:
+    def __init__(self, obj: pd.DataFrame, weights: pd.Series, rule, *args, **kwargs):
+        self._obj = obj
+        self.weights = weights
+        self._rule = rule
+        self._args = args
+        self._kwargs = kwargs
+
+    def _resample(self, obj: pd.DataFrame) -> "Resampler":
+        return obj.resample(self._rule, *self._args, **self._kwargs)
+
+    def count(self, skipna: bool = True) -> DataFrame:
+        """Count resampled observations weighted by the weights.
+
+        See `pandas.DataFrame.resample.count` for more details on the parameters.
+
+        If `skipna` is `True`, missing values in the DataFrame are not counted towards
+        the total weight for that row/column.
+
+        If `skipna` is `False`, missing values are treated as having a count of 1,
+        and weighted by the weights if available,
+        but missing weights are still treated as 0.
+        If including missing weights is desired, fill missing weights using
+        `df.wt(..., na_weight=1)`.
+        """
+        if skipna:
+            weights = self._obj.notna().mul(self.weights, axis=0)
+        else:
+            weights = pd.DataFrame(
+                np.broadcast_to(
+                    np.asarray(self.weights).reshape(-1, 1), self._obj.shape
+                ),
+                index=self._obj.index,
+                columns=self._obj.columns,
+            )
+        return self._resample(weights).sum()  # type: ignore[return-value]
+
+    def sum(self, min_count: int = 0) -> DataFrame:
+        """Sum of resampled values weighted by the weights.
+
+        See `pandas.DataFrame.resample.sum` for more details on the parameters.
+        """
+        weighted = self._obj.mul(self.weights, axis=0)
+        return self._resample(weighted).sum(min_count=min_count)  # type: ignore[return-value]
+
+    def mean(self, skipna: bool = True) -> DataFrame:
+        """Mean of resampled values weighted by the weights.
+
+        See `pandas.DataFrame.resample.mean` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
+        return self.sum(min_count=1) / self.count(skipna=skipna)  # type: ignore[return-value]
+
+    def var(self, ddof: int = 1, skipna: bool = True) -> DataFrame:
+        """Variance of values weighted by the weights.
+
+        See `pandas.DataFrame.resample.var` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
+        sum_ = self.sum(min_count=1)
+        count = self.count(skipna=skipna)
+        sum_squared = self._resample(self._obj.pow(2).mul(self.weights, axis=0)).sum(
+            min_count=1
+        )
+        return variance_from_weighted_moments(sum_, sum_squared, count, ddof=ddof)  # type: ignore[return-value]
+
+    def std(self, ddof: int = 1, skipna: bool = True) -> DataFrame:
+        """Standard deviation of values weighted by the weights.
+
+        See `pandas.DataFrame.resample.std` for more details on the parameters.
+
+        See `skipna` parameter in `count` method for how missing values are treated.
+        """
+
+        return np.sqrt(self.var(ddof=ddof, skipna=skipna))  # type: ignore[return-value]
+
+
 class WeightedFrameGroupBy:
     def __init__(self, weights: pd.Series, *args, **kwargs) -> None:
         self._groupby = DataFrameGroupBy(*args, **kwargs)
@@ -351,7 +503,7 @@ class WeightedFrameGroupBy:
         )
 
     def _weighted(self, numeric_cols: Optional[pd.Index] = None) -> DataFrame:
-        weighted: pd.DataFrame = self._groupby._selected_obj  # type: ignore[assignment]
+        weighted: pd.DataFrame = self._groupby._selected_obj.copy()  # type: ignore[assignment]
         if numeric_cols is None:
             numeric_cols = self._numeric_columns()
         weighted[numeric_cols] = weighted[numeric_cols].mul(self.weights, axis=0)
@@ -362,10 +514,11 @@ class WeightedFrameGroupBy:
 
         See `pandas.DataFrameGroupBy.count` for more details on the parameters.
 
-        If `skipna` is True, missing values in the DataFrame are not counted towards
+        If `skipna` is `True`, missing values in the DataFrame are not counted towards
         the total weight for that row/column.
 
-        If `skipna` is False, missing values are treated as having a weight of 1,
+        If `skipna` is `False`, missing values are treated as having a count of 1,
+        and weighted by the weights if available,
         but missing weights are still treated as 0.
         If including missing weights is desired, fill missing weights using
         `df.wt(..., na_weight=1)`.
@@ -444,27 +597,18 @@ class WeightedFrameGroupBy:
         See `skipna` parameter in `count` method for how missing values are treated.
         """
         numeric_cols = self._numeric_columns()
-        group_keys = self._group_keys()
-        weighted = self._weighted(numeric_cols)
 
-        sum_ = self._sum_weighted(
-            weighted,
-            numeric_cols=numeric_cols,
-            engine=engine,
-            engine_kwargs=engine_kwargs,
-        )[numeric_cols]
+        sum_ = self.sum(engine=engine, engine_kwargs=engine_kwargs)[numeric_cols]
         count = self._count_numeric(numeric_cols, skipna)
-
-        diff = (
-            weighted.reset_index()
-            .set_index(group_keys)[numeric_cols]
-            .sub((sum_ / count).loc[group_keys], axis=0)
+        sum_squared = (
+            self._groupby._selected_obj[numeric_cols]
+            .pow(2)
+            .mul(self.weights, axis=0)
+            .groupby(self._groupby._grouper)
+            .sum(engine=engine, engine_kwargs=engine_kwargs)
         )
-        diff_squared = diff.mul(diff)
 
-        return diff_squared.groupby(self._groupby._grouper).sum(  # type: ignore[arg-type]
-            engine=engine, engine_kwargs=engine_kwargs
-        ) / (count - ddof)
+        return variance_from_weighted_moments(sum_, sum_squared, count, ddof=ddof)  # type: ignore[return-value]
 
     def std(
         self,
@@ -482,6 +626,38 @@ class WeightedFrameGroupBy:
         return np.sqrt(
             self.var(ddof, skipna=skipna, engine=engine, engine_kwargs=engine_kwargs)
         )  # type: ignore[return-value]
+
+    def corr(
+        self,
+        method: Literal["pearson"] = "pearson",
+        min_periods: int = 1,
+        ddof: int = 1,
+    ) -> DataFrame:
+        """Pairwise weighted correlation of columns within each group.
+
+        This method currently supports weighted Pearson correlation.
+        """
+        if method != "pearson":
+            raise NotImplementedError(
+                "Only 'pearson' weighted correlation is supported."
+            )
+
+        grouped_corr: dict[Hashable, pd.DataFrame] = {}
+        for key, group in self:
+            grouped_corr[key] = group.corr(
+                method=method,
+                min_periods=min_periods,
+                ddof=ddof,
+            )
+
+        if not grouped_corr:
+            return DataFrame()
+
+        group_names = [
+            name for name in self._groupby._grouper.names if name is not None
+        ]
+        result = pd.concat(grouped_corr, names=group_names)
+        return DataFrame(result)
 
     @overload
     def apply(self, func: Callable[..., "Scalar"], *args, **kwargs) -> "Series": ...
