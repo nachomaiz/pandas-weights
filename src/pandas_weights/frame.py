@@ -368,7 +368,7 @@ class WeightedDataFrameAccessor(BaseWeightedAccessor[DataFrame]):
 
 
 class WeightedFrameResampler:
-    def __init__(self, obj: pd.DataFrame, weights: pd.Series, rule, *args, **kwargs):
+    def __init__(self, obj: pd.DataFrame, weights: pd.Series, rule: "Frequency | dt.timedelta", *args, **kwargs):
         self._obj = obj
         self.weights = weights
         self._rule = rule
